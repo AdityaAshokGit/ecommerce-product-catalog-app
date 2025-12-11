@@ -159,7 +159,7 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={handleClearFilters}>
              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">F</div>
-             <h1 className="text-xl font-bold text-gray-900 tracking-tight">FermatMart</h1>
+             <h1 className="text-xl font-bold text-gray-900 tracking-tight">FerMart</h1>
           </div>
           
           <div className="w-full max-w-md ml-4 relative">
