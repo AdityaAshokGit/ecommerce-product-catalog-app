@@ -125,3 +125,19 @@ def test_complex_combination(mock_get):
     items = results['items']
     assert len(items) == 2
     assert items[0].brand == "Adidas"
+
+@patch('backend.product_service.get_all_products')
+def test_pagination_out_of_bounds(mock_get, chaos_data):
+    mock_get.return_value = chaos_data # 6 items total
+    
+    # Request Page 100
+    res = filter_products(page=100, limit=10)
+    assert res['items'] == []
+    assert res['total'] == 6
+    assert res['page'] == 100
+
+    # Request Limit > Max (100)
+    # Backend should clamp or handle gracefully (Pydantic validation usually handles this at route level, 
+    # but service should allow it or fail safely).
+    res_large = filter_products(page=1, limit=1000)
+    assert len(res_large['items']) == 6
