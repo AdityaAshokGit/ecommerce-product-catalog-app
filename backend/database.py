@@ -1,6 +1,8 @@
 import json
 import os
 import time
+import heapq
+from itertools import combinations
 from typing import List, Optional, Dict
 from backend.models import Product, Order
 from pydantic import ValidationError
@@ -21,6 +23,7 @@ def build_recommendation_graph(orders: List[Order]) -> None:
     """
     Analyzes order history to build a co-occurrence matrix.
     Time Complexity: O(K * M^2) where K=Orders, M=Items per order.
+    Optimized with itertools.combinations for faster execution.
     """
     global CO_PURCHASE_MAP
     CO_PURCHASE_MAP.clear()
@@ -30,22 +33,17 @@ def build_recommendation_graph(orders: List[Order]) -> None:
     
     for order in orders:
         # Get unique items in this order to avoid self-linking
-        # (e.g. buying 2 of the same item doesn't link it to itself)
         item_ids = list({item.product_id for item in order.items})
         
-        # Double loop to link every item with every other item in the cart
-        for i in range(len(item_ids)):
-            p1 = item_ids[i]
-            for j in range(i + 1, len(item_ids)):
-                p2 = item_ids[j]
-                
-                # Link p1 -> p2
-                if p1 not in CO_PURCHASE_MAP: CO_PURCHASE_MAP[p1] = {}
-                CO_PURCHASE_MAP[p1][p2] = CO_PURCHASE_MAP[p1].get(p2, 0) + 1
-                
-                # Link p2 -> p1 (Symmetric)
-                if p2 not in CO_PURCHASE_MAP: CO_PURCHASE_MAP[p2] = {}
-                CO_PURCHASE_MAP[p2][p1] = CO_PURCHASE_MAP[p2].get(p1, 0) + 1
+        # Use itertools.combinations for cleaner, faster pair generation
+        for p1, p2 in combinations(item_ids, 2):
+            # Link p1 -> p2
+            if p1 not in CO_PURCHASE_MAP: CO_PURCHASE_MAP[p1] = {}
+            CO_PURCHASE_MAP[p1][p2] = CO_PURCHASE_MAP[p1].get(p2, 0) + 1
+            
+            # Link p2 -> p1 (Symmetric)
+            if p2 not in CO_PURCHASE_MAP: CO_PURCHASE_MAP[p2] = {}
+            CO_PURCHASE_MAP[p2][p1] = CO_PURCHASE_MAP[p2].get(p1, 0) + 1
     
     duration = time.time() - start_time
     logger.info(
@@ -56,18 +54,18 @@ def build_recommendation_graph(orders: List[Order]) -> None:
 def get_recommended_product_ids(product_id: str, limit: int = 3) -> List[str]:
     """
     Returns the top N product IDs frequently bought with the given product.
+    Time Complexity: O(N log k) where N=neighbors, k=limit (optimized with heapq).
     """
     if product_id not in CO_PURCHASE_MAP:
         return []
     
-    # Get neighbors map: { "102": 5, "105": 2 }
     neighbors = CO_PURCHASE_MAP[product_id]
     
-    # Sort by frequency count (Descending) -> [("102", 5), ("105", 2)]
-    sorted_neighbors = sorted(neighbors.items(), key=lambda item: item[1], reverse=True)
+    # heapq.nlargest is O(N log k) instead of O(N log N) for sorted()
+    # Significantly faster when k << N (e.g., limit=3, neighbors=50)
+    top_neighbors = heapq.nlargest(limit, neighbors.items(), key=lambda item: item[1])
     
-    # Return just the IDs
-    return [pid for pid, count in sorted_neighbors[:limit]]
+    return [pid for pid, count in top_neighbors]
 
 def calculate_popularity_scores(products: List[Product], orders: List[Order]) -> None:
     """

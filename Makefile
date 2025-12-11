@@ -5,7 +5,7 @@ install:
 	cd frontend && npm install
 
 run-backend:
-	cd backend && . venv/bin/activate && uvicorn main:app --reload --port 8000
+	source backend/venv/bin/activate && uvicorn backend.main:app --reload --port 8000
 
 run-frontend:
 	cd frontend && npm run dev
