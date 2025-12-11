@@ -23,3 +23,6 @@ frontend/dist/
 # --- IDEs ---
 .vscode/
 .idea/
+
+# --- Extra ---
+.github/
