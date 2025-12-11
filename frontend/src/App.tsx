@@ -19,20 +19,26 @@ function useDebounce<T>(value: T, delay: number): T {
 function App() {
   const [searchParams, setSearchParams] = useSearchParams();
   
-  // State
+  // --- STATE MANAGEMENT ---
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [selectedCategories, setSelectedCategories] = useState<string[]>(searchParams.getAll('category'));
   const [selectedBrands, setSelectedBrands] = useState<string[]>(searchParams.getAll('brand'));
   const [sort, setSort] = useState(searchParams.get('sort') || 'popular');
   
-  // NEW: Availability State
+  // Availability State
   const [availability, setAvailability] = useState<string | null>(searchParams.get('availability') || null);
 
+  // Price State
   const urlMin = searchParams.get('minPrice');
   const urlMax = searchParams.get('maxPrice');
   const [minPrice, setMinPrice] = useState<number | undefined>(urlMin ? Number(urlMin) : undefined);
   const [maxPrice, setMaxPrice] = useState<number | undefined>(urlMax ? Number(urlMax) : undefined);
 
+  // Pagination State (NEW)
+  const [page, setPage] = useState<number>(Number(searchParams.get('page')) || 1);
+  const LIMIT = 18; // Items per page
+
+  // Selected Product for Modal
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Debounce inputs
@@ -40,7 +46,7 @@ function App() {
   const debouncedMin = useDebounce(minPrice, 300);
   const debouncedMax = useDebounce(maxPrice, 300);
 
-  // Sync State -> URL
+  // --- URL SYNCHRONIZATION ---
   useEffect(() => {
     const params = new URLSearchParams();
     
@@ -53,20 +59,33 @@ function App() {
     if (debouncedMin !== undefined) params.set('minPrice', debouncedMin.toString());
     if (debouncedMax !== undefined) params.set('maxPrice', debouncedMax.toString());
     
-    // NEW: Sync Availability to URL
     if (availability) params.set('availability', availability);
+    
+    // Sync Page to URL
+    if (page > 1) params.set('page', page.toString());
 
     setSearchParams(params);
-  }, [debouncedSearch, selectedCategories, selectedBrands, sort, debouncedMin, debouncedMax, availability, setSearchParams]);
+  }, [debouncedSearch, selectedCategories, selectedBrands, sort, debouncedMin, debouncedMax, availability, page, setSearchParams]);
 
-  // Data Fetching
+  // --- DATA FETCHING (REACT QUERY V5) ---
+
+  // 1. Metadata Query (Faceted Counts)
   const metadataQuery = useQuery({
-    queryKey: ['metadata'],
-    queryFn: getMetadata,
+    queryKey: ['metadata', { q: debouncedSearch, category: selectedCategories, brand: selectedBrands, min: debouncedMin, max: debouncedMax, availability }],
+    queryFn: () => getMetadata({
+      q: debouncedSearch,
+      category: selectedCategories,
+      brand: selectedBrands,
+      minPrice: debouncedMin,
+      maxPrice: debouncedMax,
+      availability: availability || undefined
+    }),
+    placeholderData: (prev) => prev,
   });
 
+  // 2. Product Query (Paginated Results)
   const productQuery = useQuery({
-    queryKey: ['products', { q: debouncedSearch, category: selectedCategories, brand: selectedBrands, sort, min: debouncedMin, max: debouncedMax, availability }],
+    queryKey: ['products', { q: debouncedSearch, category: selectedCategories, brand: selectedBrands, sort, min: debouncedMin, max: debouncedMax, availability, page }],
     queryFn: () => getProducts({ 
         q: debouncedSearch, 
         category: selectedCategories, 
@@ -74,12 +93,24 @@ function App() {
         sort,
         minPrice: debouncedMin,
         maxPrice: debouncedMax,
-        availability: availability || undefined // Pass availability
+        availability: availability || undefined,
+        page: page,
+        limit: LIMIT
     }),
+    placeholderData: (prev) => prev,
   });
 
-  // Handlers
+  // --- HANDLERS ---
+
+  // NOTE: We reset page to 1 whenever a filter changes
+
+  const handleSearchChange = (val: string) => {
+    setSearch(val);
+    setPage(1);
+  };
+
   const handleCategoryToggle = (category: string) => {
+    setPage(1);
     setSelectedCategories(prev => 
       prev.includes(category) 
         ? prev.filter(c => c !== category)
@@ -88,11 +119,28 @@ function App() {
   };
 
   const handleBrandToggle = (brand: string) => {
+    setPage(1);
     setSelectedBrands(prev => 
       prev.includes(brand) 
         ? prev.filter(b => b !== brand) 
         : [...prev, brand]
     );
+  };
+
+  const handleSortChange = (val: string) => {
+    setPage(1);
+    setSort(val);
+  };
+
+  const handleAvailabilityChange = (val: string | null) => {
+    setPage(1);
+    setAvailability(val);
+  };
+
+  const handlePriceChange = (min?: number, max?: number) => {
+    setPage(1); // Reset page on price change (debouncing handles the delay)
+    setMinPrice(min);
+    setMaxPrice(max);
   };
 
   const handleClearFilters = () => {
@@ -101,7 +149,8 @@ function App() {
     setSelectedBrands([]);
     setMinPrice(undefined);
     setMaxPrice(undefined);
-    setAvailability(null); // Clear availability
+    setAvailability(null);
+    setPage(1);
   };
 
   return (
@@ -119,11 +168,11 @@ function App() {
                placeholder="Search products..."
                className="w-full bg-gray-100 border-transparent border rounded-md pl-4 pr-10 py-2 text-sm focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all outline-none"
                value={search}
-               onChange={(e) => setSearch(e.target.value)}
+               onChange={(e) => handleSearchChange(e.target.value)}
              />
              {search && (
                <button
-                 onClick={() => setSearch('')}
+                 onClick={() => handleSearchChange('')}
                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
                  aria-label="Clear search"
                >
@@ -155,7 +204,7 @@ function App() {
                <select 
                  className="w-full border-gray-300 rounded-md shadow-sm p-2 text-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50 cursor-pointer hover:bg-white transition-colors"
                  value={sort}
-                 onChange={(e) => setSort(e.target.value)}
+                 onChange={(e) => handleSortChange(e.target.value)}
                >
                  <option value="popular">Most Popular</option>
                  <option value="price_asc">Price: Low to High</option>
@@ -172,7 +221,7 @@ function App() {
                     <h3 className="font-bold text-xs text-gray-500 uppercase tracking-wider">Price Range</h3>
                     {(minPrice !== undefined || maxPrice !== undefined) && (
                       <button 
-                        onClick={() => { setMinPrice(undefined); setMaxPrice(undefined); }}
+                        onClick={() => handlePriceChange(undefined, undefined)}
                         className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                       >
                         Reset
@@ -184,10 +233,7 @@ function App() {
                     max={metadataQuery.data.maxPrice}
                     initialMin={minPrice}
                     initialMax={maxPrice}
-                    onChange={(min, max) => {
-                      setMinPrice(min);
-                      setMaxPrice(max);
-                    }}
+                    onChange={handlePriceChange}
                   />
                 </div>
 
@@ -197,7 +243,7 @@ function App() {
                     <h3 className="font-bold text-xs text-gray-500 uppercase tracking-wider">Category</h3>
                     {selectedCategories.length > 0 && (
                       <button 
-                        onClick={() => setSelectedCategories([])}
+                        onClick={() => { setPage(1); setSelectedCategories([]); }}
                         className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                       >
                         Clear
@@ -205,18 +251,25 @@ function App() {
                     )}
                   </div>
                   <div className="space-y-2">
-                     {metadataQuery.data?.categories.map((cat) => (
-                       <label key={cat} className="flex items-center space-x-3 cursor-pointer group">
-                         <input 
-                           type="checkbox" 
-                           value={cat}
-                           checked={selectedCategories.includes(cat)}
-                           onChange={() => handleCategoryToggle(cat)}
-                           className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 transition duration-150 ease-in-out"
-                         />
-                         <span className="text-sm text-gray-700 group-hover:text-blue-600 transition-colors capitalize">{cat}</span>
-                       </label>
-                     ))}
+                     {metadataQuery.data?.categories.map((catObj) => {
+                       const isDisabled = catObj.count === 0 && !selectedCategories.includes(catObj.name);
+                       return (
+                         <label key={catObj.name} className={`flex items-center space-x-3 group ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                           <input 
+                             type="checkbox" 
+                             value={catObj.name}
+                             checked={selectedCategories.includes(catObj.name)}
+                             onChange={() => handleCategoryToggle(catObj.name)}
+                             disabled={isDisabled}
+                             className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 transition duration-150 ease-in-out"
+                           />
+                           <span className={`text-sm transition-colors capitalize ${isDisabled ? 'text-gray-400' : 'text-gray-700 group-hover:text-blue-600'}`}>
+                             {catObj.name} 
+                             <span className="text-gray-400 text-xs ml-1">({catObj.count})</span>
+                           </span>
+                         </label>
+                       );
+                     })}
                   </div>
                 </div>
 
@@ -226,7 +279,7 @@ function App() {
                     <h3 className="font-bold text-xs text-gray-500 uppercase tracking-wider">Brand</h3>
                     {selectedBrands.length > 0 && (
                       <button 
-                        onClick={() => setSelectedBrands([])}
+                        onClick={() => { setPage(1); setSelectedBrands([]); }}
                         className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                       >
                         Clear
@@ -234,28 +287,35 @@ function App() {
                     )}
                   </div>
                   <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                     {metadataQuery.data?.brands.map((b) => (
-                       <label key={b} className="flex items-center space-x-3 cursor-pointer group">
-                         <input 
-                           type="checkbox" 
-                           value={b}
-                           checked={selectedBrands.includes(b)}
-                           onChange={() => handleBrandToggle(b)}
-                           className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 transition duration-150 ease-in-out"
-                         />
-                         <span className="text-sm text-gray-700 group-hover:text-blue-600 transition-colors">{b}</span>
-                       </label>
-                     ))}
+                     {metadataQuery.data?.brands.map((brandObj) => {
+                       const isDisabled = brandObj.count === 0 && !selectedBrands.includes(brandObj.name);
+                       return (
+                         <label key={brandObj.name} className={`flex items-center space-x-3 group ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                           <input 
+                             type="checkbox" 
+                             value={brandObj.name}
+                             checked={selectedBrands.includes(brandObj.name)}
+                             onChange={() => handleBrandToggle(brandObj.name)}
+                             disabled={isDisabled}
+                             className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 transition duration-150 ease-in-out"
+                           />
+                           <span className={`text-sm transition-colors ${isDisabled ? 'text-gray-400' : 'text-gray-700 group-hover:text-blue-600'}`}>
+                             {brandObj.name}
+                             <span className="text-gray-400 text-xs ml-1">({brandObj.count})</span>
+                           </span>
+                         </label>
+                       );
+                     })}
                   </div>
                 </div>
 
-                {/* NEW: Availability Filter */}
+                {/* Availability (Dynamic) */}
                 <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                   <div className="flex justify-between items-center mb-3">
                     <h3 className="font-bold text-xs text-gray-500 uppercase tracking-wider">Availability</h3>
                     {availability && (
                       <button 
-                        onClick={() => setAvailability(null)}
+                        onClick={() => handleAvailabilityChange(null)}
                         className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                       >
                         Clear
@@ -263,30 +323,29 @@ function App() {
                     )}
                   </div>
                   <div className="space-y-2">
-                    {/* In Stock */}
-                    <label className="flex items-center space-x-3 cursor-pointer group">
-                      <input 
-                        type="radio"
-                        name="availability"
-                        value="in-stock"
-                        checked={availability === 'in-stock'}
-                        onChange={() => setAvailability('in-stock')}
-                        className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-700 group-hover:text-blue-600 transition-colors">In Stock</span>
-                    </label>
-                    {/* Sold Out */}
-                    <label className="flex items-center space-x-3 cursor-pointer group">
-                      <input 
-                        type="radio"
-                        name="availability"
-                        value="sold-out"
-                        checked={availability === 'sold-out'}
-                        onChange={() => setAvailability('sold-out')}
-                        className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-700 group-hover:text-blue-600 transition-colors">Sold Out</span>
-                    </label>
+                    {metadataQuery.data?.availability?.map((opt) => {
+                       const apiValue = opt.value || opt.name;
+                       const isSelected = availability === apiValue;
+                       const isDisabled = opt.count === 0 && !isSelected;
+
+                       return (
+                         <label key={opt.name} className={`flex items-center space-x-3 group ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                           <input 
+                             type="radio"
+                             name="availability"
+                             value={apiValue}
+                             checked={isSelected}
+                             onChange={() => handleAvailabilityChange(apiValue)}
+                             disabled={isDisabled}
+                             className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                           />
+                           <span className={`text-sm transition-colors ${isDisabled ? 'text-gray-400' : 'text-gray-700 group-hover:text-blue-600'}`}>
+                             {opt.name}
+                             <span className="text-gray-400 text-xs ml-1">({opt.count})</span>
+                           </span>
+                         </label>
+                       );
+                    })}
                   </div>
                 </div>
               </>
@@ -294,9 +353,9 @@ function App() {
           </aside>
 
           {/* Product Grid */}
-          <section className="flex-1">
+          <section className="flex-1 flex flex-col">
             {productQuery.isLoading ? (
-               <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+               <div className="flex-1 flex flex-col items-center justify-center py-20 text-gray-400">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
                   <p>Loading catalog...</p>
                </div>
@@ -305,7 +364,7 @@ function App() {
                   <h3 className="font-bold mb-2">Something went wrong</h3>
                   <p className="text-sm">Could not connect to the backend server.</p>
                </div>
-            ) : productQuery.data?.length === 0 ? (
+            ) : productQuery.data?.items.length === 0 ? (
                <div className="text-center py-20 bg-white rounded-lg border border-gray-200 shadow-sm">
                   <h3 className="text-lg font-medium text-gray-900 mb-1">No products found</h3>
                   <p className="text-gray-500 mb-6">We couldn't find matches for your current filters.</p>
@@ -317,15 +376,48 @@ function App() {
                   </button>
                </div>
             ) : (
-               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {productQuery.data?.map((product) => (
-                    <ProductCard 
-                      key={product.id} 
-                      product={product} 
-                      onClick={(p) => setSelectedProduct(p)}
-                    />
-                  ))}
-               </div>
+               <>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {productQuery.data?.items.map((product) => (
+                      <ProductCard 
+                        key={product.id} 
+                        product={product} 
+                        onClick={(p) => setSelectedProduct(p)}
+                      />
+                    ))}
+                 </div>
+
+                 {/* Pagination Controls */}
+                 {productQuery.data && productQuery.data.total_pages > 1 && (
+                    <div className="mt-8 flex justify-center items-center gap-4 py-4 border-t border-gray-200">
+                      <button
+                        onClick={() => {
+                          setPage(p => Math.max(1, p - 1));
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        disabled={page === 1}
+                        className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Previous
+                      </button>
+                      
+                      <span className="text-sm text-gray-600">
+                        Page <span className="font-bold text-gray-900">{page}</span> of <span className="font-bold text-gray-900">{productQuery.data.total_pages}</span>
+                      </span>
+
+                      <button
+                        onClick={() => {
+                          setPage(p => Math.min(productQuery.data.total_pages, p + 1));
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        disabled={page >= productQuery.data.total_pages}
+                        className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Next
+                      </button>
+                    </div>
+                 )}
+               </>
             )}
           </section>
         </div>

@@ -1,23 +1,23 @@
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-from backend.database import load_data, get_all_products
-from backend.product_service import filter_products, get_filter_options
 from typing import List
+from contextlib import asynccontextmanager # NEW IMPORT
+
+# Import the new logic functions
+from backend.product_service import filter_products, get_faceted_metadata
 from backend.database import load_data, get_recommended_product_ids, get_all_products
 from backend.models import Product
 
-# Lifecycle event to load data on startup
+# --- FIX: LIFESPAN HANDLER (Replaces @app.on_event) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Load data
+    # Load data on startup
     load_data()
     yield
-    # Shutdown: Clean up (nothing to do here)
+    # Clean up on shutdown (if needed)
 
-app = FastAPI(title="E-commerce API", lifespan=lifespan)
+app = FastAPI(lifespan=lifespan)
 
-# CORS Setup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -28,21 +28,20 @@ app.add_middleware(
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "message": "Backend is running"}
+    return {"status": "healthy"}
 
 @app.get("/api/products")
 def get_products(
-    q: str = Query(None, description="Search query"),
-    category: List[str] = Query(None), # Accepts ?category=A&category=B
-    brand: List[str] = Query(None),    # Accepts ?brand=A&brand=B
+    q: str = Query(None),
+    category: List[str] = Query(None),
+    brand: List[str] = Query(None),
     minPrice: float = Query(None),
     maxPrice: float = Query(None),
-    sort: str = Query(None, pattern="^(price_asc|price_desc|rating|popular)$"),
-    availability: str = Query(None, pattern="^(in-stock|sold-out)$")
+    sort: str = Query(None),
+    availability: str = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, le=100)
 ):
-    """
-    Returns filtered and sorted products.
-    """
     return filter_products(
         search=q,
         categories=category,
@@ -50,30 +49,32 @@ def get_products(
         min_price=minPrice,
         max_price=maxPrice,
         sort_by=sort,
-        availability=availability
+        availability=availability,
+        page=page,
+        limit=limit
     )
 
 @app.get("/api/metadata")
-def get_metadata():
-    """
-    Returns available filter options (categories, brands) for the sidebar.
-    """
-    return get_filter_options()
+def get_metadata(
+    q: str = Query(None),
+    category: List[str] = Query(None),
+    brand: List[str] = Query(None),
+    minPrice: float = Query(None),
+    maxPrice: float = Query(None),
+    availability: str = Query(None)
+):
+    return get_faceted_metadata(
+        search=q,
+        categories=category,
+        brands=brand,
+        min_price=minPrice,
+        max_price=maxPrice,
+        availability=availability
+    )
 
 @app.get("/api/products/{product_id}/recommendations", response_model=List[Product])
 def get_recommendations(product_id: str):
-    """
-    Returns top 3 products frequently bought with the given product.
-    """
-    # 1. Get IDs from the Graph (O(1) lookup + Sort)
     rec_ids = get_recommended_product_ids(product_id, limit=3)
-    
-    # 2. Resolve IDs to full Product objects
-    # In a DB, this would be `SELECT * WHERE ID IN (...)`
-    # Here, we scan the list. O(N) but negligible for N=2000.
     all_products = get_all_products()
-    
-    # Filter to get the full objects
     recs = [p for p in all_products if p.id in rec_ids]
-    
     return recs

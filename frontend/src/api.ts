@@ -1,17 +1,15 @@
 import axios from 'axios';
-import type { Product, FilterOptions, ProductParams } from './types';
+// Import the new PaginatedResponse type
+import type { Product, FilterOptions, ProductParams, PaginatedResponse } from './types';
 
 const API_URL = 'http://localhost:8000/api';
 
-export const getProducts = async (params: ProductParams): Promise<Product[]> => {
+// CHANGE return type from Promise<Product[]> to Promise<PaginatedResponse<Product>>
+export const getProducts = async (params: ProductParams): Promise<PaginatedResponse<Product>> => {
   const searchParams = new URLSearchParams();
 
-  // 1. Search Query
-  if (params.q && params.q.trim() !== '') {
-    searchParams.append('q', params.q);
-  }
+  if (params.q && params.q.trim() !== '') searchParams.append('q', params.q);
   
-  // 2. Category: Handle String vs Array, IGNORE empty strings
   if (params.category) {
     const cats = Array.isArray(params.category) ? params.category : [params.category];
     cats.forEach(c => {
@@ -19,7 +17,6 @@ export const getProducts = async (params: ProductParams): Promise<Product[]> => 
     });
   }
 
-  // 3. Brand: Handle String vs Array, IGNORE empty strings
   if (params.brand) {
     const brands = Array.isArray(params.brand) ? params.brand : [params.brand];
     brands.forEach(b => {
@@ -27,24 +24,48 @@ export const getProducts = async (params: ProductParams): Promise<Product[]> => 
     });
   }
 
-  // 4. Other Params
   if (params.sort) searchParams.append('sort', params.sort);
-  
-  // Explicit check for undefined to allow 0
   if (params.minPrice !== undefined) searchParams.append('minPrice', params.minPrice.toString());
   if (params.maxPrice !== undefined) searchParams.append('maxPrice', params.maxPrice.toString());
+  if (params.availability) searchParams.append('availability', params.availability);
 
-  // 5. Availability 
-  if (params.availability) {
-    searchParams.append('availability', params.availability);
-  }
+  // Pagination Params
+  searchParams.append('page', (params.page || 1).toString());
+  searchParams.append('limit', (params.limit || 20).toString());
 
-  const response = await axios.get<Product[]>(`${API_URL}/products?${searchParams.toString()}`);
+  // Update Generic here too
+  const response = await axios.get<PaginatedResponse<Product>>(`${API_URL}/products?${searchParams.toString()}`);
   return response.data;
 };
 
-export const getMetadata = async (): Promise<FilterOptions> => {
-  const response = await axios.get<FilterOptions>(`${API_URL}/metadata`);
+// ... (Rest of file: getMetadata, getRecommendations stay the same)
+export const getMetadata = async (params: ProductParams): Promise<FilterOptions> => {
+  const searchParams = new URLSearchParams();
+
+  if (params.q && params.q.trim() !== '') searchParams.append('q', params.q);
+  
+  if (params.category) {
+    const cats = Array.isArray(params.category) ? params.category : [params.category];
+    cats.forEach(c => {
+      if (c && c.trim() !== '') searchParams.append('category', c);
+    });
+  }
+
+  if (params.brand) {
+    const brands = Array.isArray(params.brand) ? params.brand : [params.brand];
+    brands.forEach(b => {
+      if (b && b.trim() !== '') searchParams.append('brand', b);
+    });
+  }
+
+  if (params.minPrice !== undefined) searchParams.append('minPrice', params.minPrice.toString());
+  if (params.maxPrice !== undefined) searchParams.append('maxPrice', params.maxPrice.toString());
+  if (params.availability) searchParams.append('availability', params.availability);
+
+  // DEBUG LOG
+  console.log("Fetching Dynamic Metadata:", searchParams.toString());
+
+  const response = await axios.get<FilterOptions>(`${API_URL}/metadata?${searchParams.toString()}`);
   return response.data;
 };
 

@@ -1,32 +1,46 @@
 import { useState, useEffect, useCallback } from 'react';
 
 interface Props {
-  min: number; // Global Min (from dataset) - We might ignore this for the lower bound now
+  min: number; // Global Min
   max: number; // Global Max (from dataset)
   onChange: (min: number, max: number) => void;
   initialMin?: number;
   initialMax?: number;
 }
 
-export const PriceFilter = ({ min, max, onChange, initialMin, initialMax }: Props) => {
+export const PriceFilter = ({min, max, onChange, initialMin, initialMax }: Props) => {
   // 1. STRICT BOUNDARIES: 
-  // Lower limit is ALWAYS 0 (per user requirement).
   const rangeMin = 0; 
-  // Upper limit scales to the most expensive item (rounded up).
   const rangeMax = Math.ceil(max);
 
   // Initialize state
   const [minVal, setMinVal] = useState(initialMin ?? rangeMin);
   const [maxVal, setMaxVal] = useState(initialMax ?? rangeMax);
 
-  // Sync internal state if props change (e.g. data loads or URL updates)
+  // --- THE FIX IS HERE ---
+  // Sync internal state if props change.
+  // We added logic to CLAMP the values if the new dataset is smaller than the user's selection.
   useEffect(() => {
-    // If we have an initial value from URL, use it. Otherwise default to 0 and Global Max.
-    setMinVal(initialMin ?? rangeMin);
-    setMaxVal(initialMax ?? rangeMax);
-  }, [initialMin, initialMax, rangeMin, rangeMax]);
+    let nextMin = initialMin ?? rangeMin;
+    let nextMax = initialMax ?? rangeMax;
 
-  // --- HANDLERS ---
+    // 1. Clamp Max: If selected max (e.g. 198) > available max (e.g. 153), snap to 153.
+    // This prevents the blue slider bar from calculating > 100% width.
+    if (nextMax > rangeMax) {
+      nextMax = rangeMax;
+    }
+
+    // 2. Clamp Min: Just for safety, ensure we don't go below 0.
+    if (nextMin < rangeMin) {
+      nextMin = rangeMin;
+    }
+
+    setMinVal(nextMin);
+    setMaxVal(nextMax);
+  }, [initialMin, initialMax, rangeMin, rangeMax]);
+  // -----------------------
+
+  // --- HANDLERS (Unchanged) ---
 
   const handleMinInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = parseInt(e.target.value, 10);
@@ -66,7 +80,11 @@ export const PriceFilter = ({ min, max, onChange, initialMin, initialMax }: Prop
   // --- UI HELPERS ---
 
   const getPercent = useCallback(
-    (value: number) => Math.round(((value - rangeMin) / (rangeMax - rangeMin)) * 100),
+    (value: number) => {
+      // Safety check to prevent NaN if range is 0
+      if (rangeMax === rangeMin) return 0;
+      return Math.round(((value - rangeMin) / (rangeMax - rangeMin)) * 100);
+    },
     [rangeMin, rangeMax]
   );
 

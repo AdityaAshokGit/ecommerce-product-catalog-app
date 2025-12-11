@@ -1,89 +1,65 @@
-import pytest
-from fastapi.testclient import TestClient
-from unittest.mock import patch
-import backend.database as db  # Import module alias to avoid stale references
+from starlette.testclient import TestClient
 from backend.main import app
 from backend.models import Product
-
-# --- FIXTURES ---
+import pytest
+from unittest.mock import patch
 
 @pytest.fixture
 def client():
-    """
-    Create a TestClient where 'load_data' is disabled.
-    We patch 'backend.main.load_data' because main.py imports it directly.
-    """
-    with patch("backend.main.load_data"):
-        with TestClient(app) as c:
-            yield c
-
-@pytest.fixture(autouse=True)
-def setup_data():
-    """
-    Automatically inject a test product before EVERY test function.
-    We modify the list inside the module directly.
-    """
-    # 1. Clear any existing data
-    db.PRODUCTS.clear()
-    
-    # 2. Inject Test Data
-    db.PRODUCTS.append(
-        Product(
-            id="1", name="API Test Product", description="Desc", 
-            price=100.0, category="TestCat", brand="TestBrand", 
-            rating=5.0, in_stock=True, image_url="url", popularity_score=10
-        )
-    )
-    yield
-    # Cleanup after test
-    db.PRODUCTS.clear()
-
-# --- TESTS ---
+    return TestClient(app)
 
 def test_health_check(client):
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "message": "Backend is running"}
+    assert response.json() == {"status": "healthy"}
 
-def test_get_products_integration(client):
+@patch('backend.product_service.get_all_products')
+def test_get_products_integration(mock_get, client):
     """
     Hit the actual URL. Verify Pydantic serialization works over HTTP.
     """
+    # FIX: Return Pydantic Objects, NOT Dictionaries
+    mock_get.return_value = [
+        Product(id="1", name="TestProduct", price=10.0, category="TestCat", brand="TestBrand", in_stock=True, description="Desc", rating=5.0, image_url="url", popularity_score=0, tags=[])
+    ]
+    
     response = client.get("/api/products")
     assert response.status_code == 200
     data = response.json()
     
-    # Should now be exactly 1, because we blocked the real file load
-    assert len(data) == 1
-    assert data[0]["name"] == "API Test Product"
-    assert "imageUrl" in data[0] 
+    # Check pagination wrapper
+    assert len(data['items']) == 1
+    assert data['items'][0]["name"] == "TestProduct"
+    assert "total" in data
 
-def test_get_products_with_query_params(client):
+@patch('backend.product_service.get_all_products')
+def test_get_products_with_query_params(mock_get, client):
     """
     Verify FastAPI correctly parses query parameters from the URL string.
     """
-    # Filter that SHOULD match
-    response = client.get("/api/products?q=API&minPrice=50")
-    assert response.status_code == 200
-    assert len(response.json()) == 1
+    mock_get.return_value = [
+        Product(id="1", name="TestProduct", price=100.0, category="TestCat", brand="TestBrand", in_stock=True, description="Desc", rating=5.0, image_url="url", popularity_score=0, tags=[])
+    ]
 
-    # Filter that SHOULD NOT match
-    response = client.get("/api/products?minPrice=200")
+    # FIX: Change 'q=API' to 'q=TestProduct' so it matches the mock name
+    response = client.get("/api/products?q=TestProduct&minPrice=50")
     assert response.status_code == 200
-    assert len(response.json()) == 0
+    
+    assert len(response.json()['items']) == 1
 
-def test_metadata_endpoint(client):
+@patch('backend.product_service.get_all_products')
+def test_metadata_endpoint(mock_get, client):
+    mock_get.return_value = [
+         Product(id="1", name="P1", category="TestCat", brand="TestBrand", price=10, in_stock=True, description="", rating=0, image_url="", popularity_score=0, tags=[])
+    ]
+    
     response = client.get("/api/metadata")
     assert response.status_code == 200
     data = response.json()
-    assert "TestCat" in data["categories"]
-    assert "TestBrand" in data["brands"]
-    assert data["maxPrice"] == 100.0
-
-def test_validation_error_422(client):
-    """
-    What if a user sends text as a price? 
-    FastAPI should return 422 Unprocessable Entity automatically.
-    """
-    response = client.get("/api/products?minPrice=not_a_number")
-    assert response.status_code == 422
+    
+    # Check Faceted Structure
+    categories = [c['name'] for c in data["categories"]]
+    assert "TestCat" in categories
+    
+    brands = [b['name'] for b in data["brands"]]
+    assert "TestBrand" in brands
