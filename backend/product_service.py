@@ -1,42 +1,67 @@
 from typing import List, Optional, Dict, Set
 from backend.models import Product
 from backend.database import get_all_products
-import string
+import re
 
 # --- INVERTED INDEX STORAGE ---
 SEARCH_INDEX: Dict[str, Set[str]] = {}
 IS_INDEX_BUILT = False
 
+# --- 1. SEARCH NORMALIZER (Tokenization) ---
 def normalize_tokens(text: str) -> Set[str]:
     """
-    Splits text into lowercase tokens.
-    UPDATED: Now strictly splits by whitespace and strips punctuation.
-    This preserves Emojis (🔥) and accents while removing commas/periods.
+    Splits text into atomic, searchable words.
+    
+    Logic:
+    1. Lowercase.
+    2. Replace punctuation with SPACE (Preserves compound word boundaries).
+       "All-Clad" -> "all clad"
+    3. Split by whitespace.
+       Result: {"all", "clad"}
     """
     if not text:
         return set()
     
-    # 1. Lowercase
     text = text.lower()
+    # Regex: Replace any character that is NOT a word char or whitespace with a space.
+    # This preserves Emojis and foreign scripts (\w includes them in Python 3).
+    text = re.sub(r'[^\w\s]', ' ', text)
     
-    # 2. Split by whitespace (handles tabs, newlines, spaces)
-    raw_tokens = text.split()
-    
-    # 3. Strip punctuation from edges (e.g. "shoes," -> "shoes")
-    # We use string.punctuation for a robust list of symbols
-    clean_tokens = set()
-    for t in raw_tokens:
-        t = t.strip(string.punctuation)
-        if t: # Only add if not empty
-            clean_tokens.add(t)
-            
-    return clean_tokens
+    return set(text.split())
 
+# --- 2. FILTER NORMALIZER (Key Standardization) ---
+def normalize_key(text: str) -> str:
+    """
+    Standardizes a string for strict equality checks in Filters.
+    
+    Logic:
+    1. Lowercase.
+    2. Replace punctuation with SPACE.
+    3. Collapse multiple spaces into one.
+    
+    Examples:
+    "All-Clad"   -> "all clad"
+    "All Clad"   -> "all clad" (Match ✅)
+    "the-rest"   -> "the rest"
+    "therest"    -> "therest"  (No Collision ✅)
+    """
+    if not text:
+        return ""
+    
+    text = text.lower()
+    # Replace punctuation/symbols with space
+    text = re.sub(r'[^\w\s]', ' ', text)
+    
+    # Split and Join to collapse multiple spaces (e.g. "all   clad" -> "all clad")
+    return " ".join(text.split())
+
+# --- INDEXING LOGIC ---
 def build_search_index(products: List[Product]):
     global SEARCH_INDEX, IS_INDEX_BUILT
     SEARCH_INDEX.clear()
     
     for product in products:
+        # Index Name, Description, Brand, and Category
         content = f"{product.name} {product.description} {product.brand} {product.category}"
         tokens = normalize_tokens(content)
         
@@ -49,16 +74,12 @@ def build_search_index(products: List[Product]):
 
 def search_with_index(query: str, all_products: List[Product]) -> List[Product]:
     global IS_INDEX_BUILT
-    
-    # Lazy Load
     if not IS_INDEX_BUILT or not SEARCH_INDEX:
         build_search_index(all_products)
     
     query_tokens = normalize_tokens(query)
     
-    # EDGE CASE FIX:
-    # If user provided a search string (e.g. "!!!") but tokens are empty,
-    # it means no valid words were found. Return NO results.
+    # If the user's query contained no valid tokens (e.g. "!!!"), return nothing.
     if not query_tokens:
         return []
 
@@ -70,8 +91,10 @@ def search_with_index(query: str, all_products: List[Product]) -> List[Product]:
         if candidate_ids is None:
             candidate_ids = matches
         else:
+            # Intersection: Find products that contain ALL tokens (AND logic)
             candidate_ids = candidate_ids.intersection(matches)
             
+        # Optimization: Fail fast if no intersection
         if not candidate_ids:
             return []
 
@@ -81,8 +104,8 @@ def search_with_index(query: str, all_products: List[Product]) -> List[Product]:
 
 def filter_products(
     search: Optional[str] = None,
-    category: Optional[str] = None,
-    brand: Optional[str] = None,
+    categories: Optional[List[str]] = None,
+    brands: Optional[List[str]] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
     sort_by: Optional[str] = None
@@ -92,19 +115,23 @@ def filter_products(
 
     # 1. SEARCH
     if search:
-        # Optimization: specific check for whitespace-only strings
         if not search.strip():
-            # If search is just "   ", return all products (or empty? Standard is ignore)
+            # If search is just whitespace, ignore it (return all)
             pass 
         else:
             products = search_with_index(search, products)
 
-    # 2. FILTER
-    if category:
-        products = [p for p in products if p.category.lower() == category.lower()]
+    # 2. FILTER (Multi-Select with Robust Normalization)
+    if categories:
+        # Pre-normalize targets into a Set for O(1) lookup
+        target_cats = {normalize_key(c) for c in categories}
+        # Check if normalized product category exists in the target set
+        products = [p for p in products if normalize_key(p.category) in target_cats]
     
-    if brand:
-        products = [p for p in products if p.brand.lower() == brand.lower()]
+    if brands:
+        # Pre-normalize targets
+        target_brands = {normalize_key(b) for b in brands}
+        products = [p for p in products if normalize_key(p.brand) in target_brands]
 
     if min_price is not None:
         products = [p for p in products if p.price >= min_price]
@@ -126,7 +153,6 @@ def filter_products(
 
 def get_filter_options():
     products = get_all_products()
-    
     categories = sorted(list(set(p.category for p in products)))
     brands = sorted(list(set(p.brand for p in products)))
     

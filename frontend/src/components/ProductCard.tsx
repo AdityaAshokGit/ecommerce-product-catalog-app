@@ -5,6 +5,7 @@ interface Props {
 }
 
 export const ProductCard = ({ product }: Props) => {
+  // We keep the "HOT" badge for visually distinct high-performers
   const isPopular = product.popularityScore > 50;
 
   return (
@@ -30,7 +31,7 @@ export const ProductCard = ({ product }: Props) => {
       {/* Content */}
       <div className="flex-grow">
         <div className="flex justify-between items-start mb-1">
-          {/* UPDATED: Brand + Category */}
+          {/* Left: Brand + Category */}
           <div className="flex flex-col">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
               {product.brand}
@@ -40,9 +41,22 @@ export const ProductCard = ({ product }: Props) => {
             </span>
           </div>
           
-          <div className="flex items-center text-yellow-500 text-sm font-medium">
-            <span>★</span>
-            <span className="ml-1 text-gray-700">{product.rating}</span>
+          {/* Right: Stats (Rating + Popularity) */}
+          <div className="flex flex-col items-end">
+            {/* Rating */}
+            <div className="flex items-center text-yellow-500 text-sm font-medium">
+              <span>★</span>
+              <span className="ml-1 text-gray-700">{product.rating}</span>
+            </div>
+            
+            {/* NEW: Popularity Score */}
+            <div 
+              className="flex items-center text-orange-500 text-xs font-medium mt-0.5" 
+              title={`Popularity Score: ${product.popularityScore} (Based on order frequency)`}
+            >
+              <span className="mr-1">🔥</span>
+              <span className="text-gray-600">{product.popularityScore}</span>
+            </div>
           </div>
         </div>
         

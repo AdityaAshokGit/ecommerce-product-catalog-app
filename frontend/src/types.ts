@@ -9,7 +9,7 @@ export interface Product {
   inStock: boolean;
   imageUrl: string;
   tags: string[];
-  popularityScore: number; // Matches the camelCase from Pydantic
+  popularityScore: number;
 }
 
 export interface FilterOptions {
@@ -21,8 +21,8 @@ export interface FilterOptions {
 
 export interface ProductParams {
   q?: string;
-  category?: string;
-  brand?: string;
+  category?: string | string[];
+  brand?: string | string[];
   minPrice?: number;
   maxPrice?: number;
   sort?: string;

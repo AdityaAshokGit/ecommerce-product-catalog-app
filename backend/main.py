@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from backend.database import load_data, get_all_products
 from backend.product_service import filter_products, get_filter_options
+from typing import List
 
 # Lifecycle event to load data on startup
 @asynccontextmanager
@@ -30,8 +31,8 @@ def health_check():
 @app.get("/api/products")
 def get_products(
     q: str = Query(None, description="Search query"),
-    category: str = Query(None),
-    brand: str = Query(None),
+    category: List[str] = Query(None), # Accepts ?category=A&category=B
+    brand: List[str] = Query(None),    # Accepts ?brand=A&brand=B
     minPrice: float = Query(None),
     maxPrice: float = Query(None),
     sort: str = Query(None, pattern="^(price_asc|price_desc|rating|popular)$")
@@ -41,8 +42,8 @@ def get_products(
     """
     return filter_products(
         search=q,
-        category=category,
-        brand=brand,
+        categories=category,
+        brands=brand,
         min_price=minPrice,
         max_price=maxPrice,
         sort_by=sort

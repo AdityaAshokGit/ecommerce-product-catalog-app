@@ -39,7 +39,7 @@ def load_data():
             orders_data = json.load(f)
             ORDERS = [Order(**item) for item in orders_data]
             print(f"✅ Loaded {len(ORDERS)} orders.")
-    except (FileNotFoundError, json.JSONDecodeError): # <--- UPDATED
+    except (FileNotFoundError, json.JSONDecodeError):
         print(f"⚠️ Warning: orders.json missing or corrupt")
         ORDERS = []
 

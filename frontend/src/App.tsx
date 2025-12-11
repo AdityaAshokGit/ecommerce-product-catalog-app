@@ -19,35 +19,36 @@ function App() {
   
   // 1. Initialize State from URL
   const [search, setSearch] = useState(searchParams.get('q') || '');
-  const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || '');
-  const [selectedBrand, setSelectedBrand] = useState(searchParams.get('brand') || '');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(searchParams.getAll('category'));
+  const [selectedBrands, setSelectedBrands] = useState<string[]>(searchParams.getAll('brand'));
   const [sort, setSort] = useState(searchParams.get('sort') || 'popular');
   
-  // Price State (Strings in URL, numbers in logic)
+  // Price State
   const urlMin = searchParams.get('minPrice');
   const urlMax = searchParams.get('maxPrice');
   const [minPrice, setMinPrice] = useState<number | undefined>(urlMin ? Number(urlMin) : undefined);
   const [maxPrice, setMaxPrice] = useState<number | undefined>(urlMax ? Number(urlMax) : undefined);
 
-  // Debounce search AND price to prevent lag while sliding
+  // Debounce inputs
   const debouncedSearch = useDebounce(search, 300);
   const debouncedMin = useDebounce(minPrice, 300);
   const debouncedMax = useDebounce(maxPrice, 300);
 
   // 2. Sync State -> URL
   useEffect(() => {
-    const params: Record<string, string> = {};
-    if (debouncedSearch) params.q = debouncedSearch;
-    if (selectedCategory) params.category = selectedCategory;
-    if (selectedBrand) params.brand = selectedBrand;
-    if (sort) params.sort = sort;
+    const params = new URLSearchParams();
     
-    // Only set price params if they differ from defaults (optional, but cleaner URL)
-    if (debouncedMin !== undefined) params.minPrice = debouncedMin.toString();
-    if (debouncedMax !== undefined) params.maxPrice = debouncedMax.toString();
+    if (debouncedSearch) params.set('q', debouncedSearch);
+    
+    selectedCategories.forEach(c => params.append('category', c));
+    selectedBrands.forEach(b => params.append('brand', b));
+    
+    if (sort) params.set('sort', sort);
+    if (debouncedMin !== undefined) params.set('minPrice', debouncedMin.toString());
+    if (debouncedMax !== undefined) params.set('maxPrice', debouncedMax.toString());
 
     setSearchParams(params);
-  }, [debouncedSearch, selectedCategory, selectedBrand, sort, debouncedMin, debouncedMax, setSearchParams]);
+  }, [debouncedSearch, selectedCategories, selectedBrands, sort, debouncedMin, debouncedMax, setSearchParams]);
 
   // 3. Data Fetching
   const metadataQuery = useQuery({
@@ -56,22 +57,39 @@ function App() {
   });
 
   const productQuery = useQuery({
-    // Add price to query key so it refetches when they change
-    queryKey: ['products', { q: debouncedSearch, category: selectedCategory, brand: selectedBrand, sort, min: debouncedMin, max: debouncedMax }],
+    queryKey: ['products', { q: debouncedSearch, category: selectedCategories, brand: selectedBrands, sort, min: debouncedMin, max: debouncedMax }],
     queryFn: () => getProducts({ 
         q: debouncedSearch, 
-        category: selectedCategory, 
-        brand: selectedBrand, 
+        category: selectedCategories, 
+        brand: selectedBrands, 
         sort,
         minPrice: debouncedMin,
         maxPrice: debouncedMax
     }),
   });
 
+  // --- HANDLERS ---
+
+  const handleCategoryToggle = (category: string) => {
+    setSelectedCategories(prev => 
+      prev.includes(category) 
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    );
+  };
+
+  const handleBrandToggle = (brand: string) => {
+    setSelectedBrands(prev => 
+      prev.includes(brand) 
+        ? prev.filter(b => b !== brand) 
+        : [...prev, brand]
+    );
+  };
+
   const handleClearFilters = () => {
     setSearch('');
-    setSelectedCategory('');
-    setSelectedBrand('');
+    setSelectedCategories([]);
+    setSelectedBrands([]);
     setMinPrice(undefined);
     setMaxPrice(undefined);
   };
@@ -84,14 +102,26 @@ function App() {
              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">F</div>
              <h1 className="text-xl font-bold text-gray-900 tracking-tight">FermatMart</h1>
           </div>
-          <div className="w-full max-w-md ml-4">
+          
+          <div className="w-full max-w-md ml-4 relative">
              <input
                type="text"
                placeholder="Search products..."
-               className="w-full bg-gray-100 border-transparent border rounded-md px-4 py-2 text-sm focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all outline-none"
+               className="w-full bg-gray-100 border-transparent border rounded-md pl-4 pr-10 py-2 text-sm focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all outline-none"
                value={search}
                onChange={(e) => setSearch(e.target.value)}
              />
+             {search && (
+               <button
+                 onClick={() => setSearch('')}
+                 className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                 aria-label="Clear search"
+               >
+                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                 </svg>
+               </button>
+             )}
           </div>
         </div>
       </header>
@@ -100,13 +130,20 @@ function App() {
         <div className="flex flex-col md:flex-row gap-8">
           
           {/* Sidebar */}
-          <aside className="w-full md:w-64 flex-shrink-0 space-y-8">
+          <aside className="w-full md:w-64 flex-shrink-0 space-y-6">
             
-            {/* Sort */}
+            <div className="flex justify-between items-center px-1">
+              <h2 className="text-lg font-bold text-gray-900">Filters</h2>
+              <button onClick={handleClearFilters} className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                Reset All
+              </button>
+            </div>
+            
+            {/* Sort (Card Style) */}
             <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-               <h3 className="font-bold text-sm text-gray-900 mb-3 uppercase tracking-wide">Sort By</h3>
+               <h3 className="font-bold text-xs text-gray-500 mb-3 uppercase tracking-wider">Sort By</h3>
                <select 
-                 className="w-full border-gray-300 rounded-md shadow-sm p-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+                 className="w-full border-gray-300 rounded-md shadow-sm p-2 text-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50 cursor-pointer hover:bg-white transition-colors"
                  value={sort}
                  onChange={(e) => setSort(e.target.value)}
                >
@@ -117,82 +154,92 @@ function App() {
                </select>
             </div>
 
-            {/* Price Filter */}
             {metadataQuery.data && (
-              <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                <h3 className="font-bold text-sm text-gray-900 mb-3 uppercase tracking-wide">Price Range</h3>
-                <PriceFilter 
-                  min={metadataQuery.data.minPrice}
-                  max={metadataQuery.data.maxPrice}
-                  initialMin={minPrice}
-                  initialMax={maxPrice}
-                  onChange={(min, max) => {
-                    setMinPrice(min);
-                    setMaxPrice(max);
-                  }}
-                />
-              </div>
+              <>
+                {/* Price Filter (Card Style + Reset Logic) */}
+                <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-bold text-xs text-gray-500 uppercase tracking-wider">Price Range</h3>
+                    {(minPrice !== undefined || maxPrice !== undefined) && (
+                      <button 
+                        onClick={() => { setMinPrice(undefined); setMaxPrice(undefined); }}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                  <PriceFilter 
+                    min={metadataQuery.data.minPrice}
+                    max={metadataQuery.data.maxPrice}
+                    initialMin={minPrice}
+                    initialMax={maxPrice}
+                    onChange={(min, max) => {
+                      setMinPrice(min);
+                      setMaxPrice(max);
+                    }}
+                  />
+                </div>
+
+                {/* Categories (Card Style) */}
+                <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-bold text-xs text-gray-500 uppercase tracking-wider">Category</h3>
+                    {selectedCategories.length > 0 && (
+                      <button 
+                        onClick={() => setSelectedCategories([])}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                     {metadataQuery.data?.categories.map((cat) => (
+                       <label key={cat} className="flex items-center space-x-3 cursor-pointer group">
+                         <input 
+                           type="checkbox" 
+                           value={cat}
+                           checked={selectedCategories.includes(cat)}
+                           onChange={() => handleCategoryToggle(cat)}
+                           className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 transition duration-150 ease-in-out"
+                         />
+                         <span className="text-sm text-gray-700 group-hover:text-blue-600 transition-colors capitalize">{cat}</span>
+                       </label>
+                     ))}
+                  </div>
+                </div>
+
+                {/* Brands (Card Style) */}
+                <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-bold text-xs text-gray-500 uppercase tracking-wider">Brand</h3>
+                    {selectedBrands.length > 0 && (
+                      <button 
+                        onClick={() => setSelectedBrands([])}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                     {metadataQuery.data?.brands.map((b) => (
+                       <label key={b} className="flex items-center space-x-3 cursor-pointer group">
+                         <input 
+                           type="checkbox" 
+                           value={b}
+                           checked={selectedBrands.includes(b)}
+                           onChange={() => handleBrandToggle(b)}
+                           className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 transition duration-150 ease-in-out"
+                         />
+                         <span className="text-sm text-gray-700 group-hover:text-blue-600 transition-colors">{b}</span>
+                       </label>
+                     ))}
+                  </div>
+                </div>
+              </>
             )}
-
-            {/* Categories */}
-            <div>
-              <h3 className="font-bold text-sm text-gray-900 mb-3 uppercase tracking-wide">Category</h3>
-              <div className="space-y-2">
-                 <label className="flex items-center space-x-2 cursor-pointer hover:text-blue-600">
-                    <input 
-                      type="radio" 
-                      name="category" 
-                      checked={selectedCategory === ''}
-                      onChange={() => setSelectedCategory('')}
-                      className="text-blue-600 focus:ring-blue-500 border-gray-300"
-                    />
-                    <span className="text-sm">All Categories</span>
-                 </label>
-                 {metadataQuery.data?.categories.map((cat) => (
-                   <label key={cat} className="flex items-center space-x-2 cursor-pointer hover:text-blue-600">
-                     <input 
-                       type="radio" 
-                       name="category"
-                       value={cat}
-                       checked={selectedCategory === cat}
-                       onChange={() => setSelectedCategory(cat)}
-                       className="text-blue-600 focus:ring-blue-500 border-gray-300"
-                     />
-                     <span className="text-sm capitalize">{cat}</span>
-                   </label>
-                 ))}
-              </div>
-            </div>
-
-             {/* Brands */}
-             <div>
-              <h3 className="font-bold text-sm text-gray-900 mb-3 uppercase tracking-wide">Brand</h3>
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                 <label className="flex items-center space-x-2 cursor-pointer hover:text-blue-600">
-                    <input 
-                      type="radio" 
-                      name="brand" 
-                      checked={selectedBrand === ''}
-                      onChange={() => setSelectedBrand('')}
-                      className="text-blue-600 focus:ring-blue-500 border-gray-300"
-                    />
-                    <span className="text-sm">All Brands</span>
-                 </label>
-                 {metadataQuery.data?.brands.map((b) => (
-                   <label key={b} className="flex items-center space-x-2 cursor-pointer hover:text-blue-600">
-                     <input 
-                       type="radio" 
-                       name="brand"
-                       value={b}
-                       checked={selectedBrand === b}
-                       onChange={() => setSelectedBrand(b)}
-                       className="text-blue-600 focus:ring-blue-500 border-gray-300"
-                     />
-                     <span className="text-sm">{b}</span>
-                   </label>
-                 ))}
-              </div>
-            </div>
           </aside>
 
           {/* Product Grid */}
