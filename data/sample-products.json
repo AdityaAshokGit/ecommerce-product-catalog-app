@@ -1,0 +1,62 @@
+[
+  {
+    "id": "1",
+    "name": "Wireless Bluetooth Headphones",
+    "description": "Premium noise-cancelling headphones with 30-hour battery life and superior sound quality.",
+    "price": 199.99,
+    "category": "Electronics",
+    "brand": "AudioTech",
+    "rating": 4.5,
+    "inStock": true,
+    "imageUrl": "https://via.placeholder.com/300x300?text=Headphones",
+    "tags": ["wireless", "bluetooth", "noise-cancelling", "audio"]
+  },
+  {
+    "id": "2",
+    "name": "Organic Cotton T-Shirt",
+    "description": "Comfortable and eco-friendly t-shirt made from 100% organic cotton.",
+    "price": 29.99,
+    "category": "Clothing",
+    "brand": "EcoWear",
+    "rating": 4.2,
+    "inStock": true,
+    "imageUrl": "https://via.placeholder.com/300x300?text=T-Shirt",
+    "tags": ["organic", "cotton", "casual", "sustainable"]
+  },
+  {
+    "id": "3",
+    "name": "Stainless Steel Water Bottle",
+    "description": "Insulated water bottle that keeps drinks cold for 24 hours or hot for 12 hours.",
+    "price": 34.99,
+    "category": "Sports & Outdoors",
+    "brand": "HydroFlask",
+    "rating": 4.8,
+    "inStock": true,
+    "imageUrl": "https://via.placeholder.com/300x300?text=Water+Bottle",
+    "tags": ["insulated", "stainless-steel", "eco-friendly", "sports"]
+  },
+  {
+    "id": "4",
+    "name": "Smart LED Desk Lamp",
+    "description": "Adjustable desk lamp with multiple brightness levels and color temperatures.",
+    "price": 79.99,
+    "category": "Home & Garden",
+    "brand": "BrightHome",
+    "rating": 4.3,
+    "inStock": false,
+    "imageUrl": "https://via.placeholder.com/300x300?text=Desk+Lamp",
+    "tags": ["led", "adjustable", "smart", "home-office"]
+  },
+  {
+    "id": "5",
+    "name": "The Psychology of Money",
+    "description": "Timeless lessons on wealth, greed, and happiness by Morgan Housel.",
+    "price": 16.99,
+    "category": "Books",
+    "brand": "Harriman House",
+    "rating": 4.7,
+    "inStock": true,
+    "imageUrl": "https://via.placeholder.com/300x300?text=Book",
+    "tags": ["finance", "psychology", "non-fiction", "bestseller"]
+  }
+]

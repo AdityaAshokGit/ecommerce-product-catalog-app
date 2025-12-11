@@ -1,0 +1,235 @@
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
+import { getProducts, getMetadata } from './api';
+import { ProductCard } from './components/ProductCard';
+import { PriceFilter } from './components/PriceFilter';
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+}
+
+function App() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  // 1. Initialize State from URL
+  const [search, setSearch] = useState(searchParams.get('q') || '');
+  const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || '');
+  const [selectedBrand, setSelectedBrand] = useState(searchParams.get('brand') || '');
+  const [sort, setSort] = useState(searchParams.get('sort') || 'popular');
+  
+  // Price State (Strings in URL, numbers in logic)
+  const urlMin = searchParams.get('minPrice');
+  const urlMax = searchParams.get('maxPrice');
+  const [minPrice, setMinPrice] = useState<number | undefined>(urlMin ? Number(urlMin) : undefined);
+  const [maxPrice, setMaxPrice] = useState<number | undefined>(urlMax ? Number(urlMax) : undefined);
+
+  // Debounce search AND price to prevent lag while sliding
+  const debouncedSearch = useDebounce(search, 300);
+  const debouncedMin = useDebounce(minPrice, 300);
+  const debouncedMax = useDebounce(maxPrice, 300);
+
+  // 2. Sync State -> URL
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (debouncedSearch) params.q = debouncedSearch;
+    if (selectedCategory) params.category = selectedCategory;
+    if (selectedBrand) params.brand = selectedBrand;
+    if (sort) params.sort = sort;
+    
+    // Only set price params if they differ from defaults (optional, but cleaner URL)
+    if (debouncedMin !== undefined) params.minPrice = debouncedMin.toString();
+    if (debouncedMax !== undefined) params.maxPrice = debouncedMax.toString();
+
+    setSearchParams(params);
+  }, [debouncedSearch, selectedCategory, selectedBrand, sort, debouncedMin, debouncedMax, setSearchParams]);
+
+  // 3. Data Fetching
+  const metadataQuery = useQuery({
+    queryKey: ['metadata'],
+    queryFn: getMetadata,
+  });
+
+  const productQuery = useQuery({
+    // Add price to query key so it refetches when they change
+    queryKey: ['products', { q: debouncedSearch, category: selectedCategory, brand: selectedBrand, sort, min: debouncedMin, max: debouncedMax }],
+    queryFn: () => getProducts({ 
+        q: debouncedSearch, 
+        category: selectedCategory, 
+        brand: selectedBrand, 
+        sort,
+        minPrice: debouncedMin,
+        maxPrice: debouncedMax
+    }),
+  });
+
+  const handleClearFilters = () => {
+    setSearch('');
+    setSelectedCategory('');
+    setSelectedBrand('');
+    setMinPrice(undefined);
+    setMaxPrice(undefined);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2 cursor-pointer" onClick={handleClearFilters}>
+             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">F</div>
+             <h1 className="text-xl font-bold text-gray-900 tracking-tight">FermatMart</h1>
+          </div>
+          <div className="w-full max-w-md ml-4">
+             <input
+               type="text"
+               placeholder="Search products..."
+               className="w-full bg-gray-100 border-transparent border rounded-md px-4 py-2 text-sm focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all outline-none"
+               value={search}
+               onChange={(e) => setSearch(e.target.value)}
+             />
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex flex-col md:flex-row gap-8">
+          
+          {/* Sidebar */}
+          <aside className="w-full md:w-64 flex-shrink-0 space-y-8">
+            
+            {/* Sort */}
+            <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+               <h3 className="font-bold text-sm text-gray-900 mb-3 uppercase tracking-wide">Sort By</h3>
+               <select 
+                 className="w-full border-gray-300 rounded-md shadow-sm p-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+                 value={sort}
+                 onChange={(e) => setSort(e.target.value)}
+               >
+                 <option value="popular">Most Popular</option>
+                 <option value="price_asc">Price: Low to High</option>
+                 <option value="price_desc">Price: High to Low</option>
+                 <option value="rating">Top Rated</option>
+               </select>
+            </div>
+
+            {/* Price Filter */}
+            {metadataQuery.data && (
+              <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                <h3 className="font-bold text-sm text-gray-900 mb-3 uppercase tracking-wide">Price Range</h3>
+                <PriceFilter 
+                  min={metadataQuery.data.minPrice}
+                  max={metadataQuery.data.maxPrice}
+                  initialMin={minPrice}
+                  initialMax={maxPrice}
+                  onChange={(min, max) => {
+                    setMinPrice(min);
+                    setMaxPrice(max);
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Categories */}
+            <div>
+              <h3 className="font-bold text-sm text-gray-900 mb-3 uppercase tracking-wide">Category</h3>
+              <div className="space-y-2">
+                 <label className="flex items-center space-x-2 cursor-pointer hover:text-blue-600">
+                    <input 
+                      type="radio" 
+                      name="category" 
+                      checked={selectedCategory === ''}
+                      onChange={() => setSelectedCategory('')}
+                      className="text-blue-600 focus:ring-blue-500 border-gray-300"
+                    />
+                    <span className="text-sm">All Categories</span>
+                 </label>
+                 {metadataQuery.data?.categories.map((cat) => (
+                   <label key={cat} className="flex items-center space-x-2 cursor-pointer hover:text-blue-600">
+                     <input 
+                       type="radio" 
+                       name="category"
+                       value={cat}
+                       checked={selectedCategory === cat}
+                       onChange={() => setSelectedCategory(cat)}
+                       className="text-blue-600 focus:ring-blue-500 border-gray-300"
+                     />
+                     <span className="text-sm capitalize">{cat}</span>
+                   </label>
+                 ))}
+              </div>
+            </div>
+
+             {/* Brands */}
+             <div>
+              <h3 className="font-bold text-sm text-gray-900 mb-3 uppercase tracking-wide">Brand</h3>
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                 <label className="flex items-center space-x-2 cursor-pointer hover:text-blue-600">
+                    <input 
+                      type="radio" 
+                      name="brand" 
+                      checked={selectedBrand === ''}
+                      onChange={() => setSelectedBrand('')}
+                      className="text-blue-600 focus:ring-blue-500 border-gray-300"
+                    />
+                    <span className="text-sm">All Brands</span>
+                 </label>
+                 {metadataQuery.data?.brands.map((b) => (
+                   <label key={b} className="flex items-center space-x-2 cursor-pointer hover:text-blue-600">
+                     <input 
+                       type="radio" 
+                       name="brand"
+                       value={b}
+                       checked={selectedBrand === b}
+                       onChange={() => setSelectedBrand(b)}
+                       className="text-blue-600 focus:ring-blue-500 border-gray-300"
+                     />
+                     <span className="text-sm">{b}</span>
+                   </label>
+                 ))}
+              </div>
+            </div>
+          </aside>
+
+          {/* Product Grid */}
+          <section className="flex-1">
+            {productQuery.isLoading ? (
+               <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                  <p>Loading catalog...</p>
+               </div>
+            ) : productQuery.isError ? (
+               <div className="text-center py-20 bg-red-50 rounded-lg border border-red-200 text-red-600">
+                  <h3 className="font-bold mb-2">Something went wrong</h3>
+                  <p className="text-sm">Could not connect to the backend server.</p>
+               </div>
+            ) : productQuery.data?.length === 0 ? (
+               <div className="text-center py-20 bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <h3 className="text-lg font-medium text-gray-900 mb-1">No products found</h3>
+                  <p className="text-gray-500 mb-6">We couldn't find matches for your current filters.</p>
+                  <button 
+                    onClick={handleClearFilters}
+                    className="text-blue-600 hover:text-blue-800 font-medium underline underline-offset-4"
+                  >
+                    Clear all filters
+                  </button>
+               </div>
+            ) : (
+               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {productQuery.data?.map((product) => (
+                    <ProductCard key={product.id} product={product} />
+                  ))}
+               </div>
+            )}
+          </section>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+export default App;
