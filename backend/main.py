@@ -37,7 +37,8 @@ def get_products(
     brand: List[str] = Query(None),    # Accepts ?brand=A&brand=B
     minPrice: float = Query(None),
     maxPrice: float = Query(None),
-    sort: str = Query(None, pattern="^(price_asc|price_desc|rating|popular)$")
+    sort: str = Query(None, pattern="^(price_asc|price_desc|rating|popular)$"),
+    availability: str = Query(None, pattern="^(in-stock|sold-out)$")
 ):
     """
     Returns filtered and sorted products.
@@ -48,7 +49,8 @@ def get_products(
         brands=brand,
         min_price=minPrice,
         max_price=maxPrice,
-        sort_by=sort
+        sort_by=sort,
+        availability=availability
     )
 
 @app.get("/api/metadata")

@@ -26,4 +26,5 @@ export interface ProductParams {
   minPrice?: number;
   maxPrice?: number;
   sort?: string;
+  availability?: string;
 }

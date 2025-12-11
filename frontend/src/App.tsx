@@ -4,7 +4,6 @@ import { useSearchParams } from 'react-router-dom';
 import { getProducts, getMetadata } from './api';
 import { ProductCard } from './components/ProductCard';
 import { PriceFilter } from './components/PriceFilter';
-// 1. IMPORT MODAL AND TYPE
 import { ProductModal } from './components/ProductModal';
 import type { Product } from './types';
 
@@ -26,12 +25,14 @@ function App() {
   const [selectedBrands, setSelectedBrands] = useState<string[]>(searchParams.getAll('brand'));
   const [sort, setSort] = useState(searchParams.get('sort') || 'popular');
   
+  // NEW: Availability State
+  const [availability, setAvailability] = useState<string | null>(searchParams.get('availability') || null);
+
   const urlMin = searchParams.get('minPrice');
   const urlMax = searchParams.get('maxPrice');
   const [minPrice, setMinPrice] = useState<number | undefined>(urlMin ? Number(urlMin) : undefined);
   const [maxPrice, setMaxPrice] = useState<number | undefined>(urlMax ? Number(urlMax) : undefined);
 
-  // 2. NEW STATE FOR SELECTED PRODUCT
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Debounce inputs
@@ -51,9 +52,12 @@ function App() {
     if (sort) params.set('sort', sort);
     if (debouncedMin !== undefined) params.set('minPrice', debouncedMin.toString());
     if (debouncedMax !== undefined) params.set('maxPrice', debouncedMax.toString());
+    
+    // NEW: Sync Availability to URL
+    if (availability) params.set('availability', availability);
 
     setSearchParams(params);
-  }, [debouncedSearch, selectedCategories, selectedBrands, sort, debouncedMin, debouncedMax, setSearchParams]);
+  }, [debouncedSearch, selectedCategories, selectedBrands, sort, debouncedMin, debouncedMax, availability, setSearchParams]);
 
   // Data Fetching
   const metadataQuery = useQuery({
@@ -62,14 +66,15 @@ function App() {
   });
 
   const productQuery = useQuery({
-    queryKey: ['products', { q: debouncedSearch, category: selectedCategories, brand: selectedBrands, sort, min: debouncedMin, max: debouncedMax }],
+    queryKey: ['products', { q: debouncedSearch, category: selectedCategories, brand: selectedBrands, sort, min: debouncedMin, max: debouncedMax, availability }],
     queryFn: () => getProducts({ 
         q: debouncedSearch, 
         category: selectedCategories, 
         brand: selectedBrands, 
         sort,
         minPrice: debouncedMin,
-        maxPrice: debouncedMax
+        maxPrice: debouncedMax,
+        availability: availability || undefined // Pass availability
     }),
   });
 
@@ -96,6 +101,7 @@ function App() {
     setSelectedBrands([]);
     setMinPrice(undefined);
     setMaxPrice(undefined);
+    setAvailability(null); // Clear availability
   };
 
   return (
@@ -143,7 +149,7 @@ function App() {
               </button>
             </div>
             
-            {/* Sort (Card Style) */}
+            {/* Sort */}
             <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                <h3 className="font-bold text-xs text-gray-500 mb-3 uppercase tracking-wider">Sort By</h3>
                <select 
@@ -160,7 +166,7 @@ function App() {
 
             {metadataQuery.data && (
               <>
-                {/* Price Filter (Card Style + Reset Logic) */}
+                {/* Price Filter */}
                 <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                   <div className="flex justify-between items-center mb-3">
                     <h3 className="font-bold text-xs text-gray-500 uppercase tracking-wider">Price Range</h3>
@@ -185,7 +191,7 @@ function App() {
                   />
                 </div>
 
-                {/* Categories (Card Style) */}
+                {/* Categories */}
                 <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                   <div className="flex justify-between items-center mb-3">
                     <h3 className="font-bold text-xs text-gray-500 uppercase tracking-wider">Category</h3>
@@ -214,7 +220,7 @@ function App() {
                   </div>
                 </div>
 
-                {/* Brands (Card Style) */}
+                {/* Brands */}
                 <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                   <div className="flex justify-between items-center mb-3">
                     <h3 className="font-bold text-xs text-gray-500 uppercase tracking-wider">Brand</h3>
@@ -240,6 +246,47 @@ function App() {
                          <span className="text-sm text-gray-700 group-hover:text-blue-600 transition-colors">{b}</span>
                        </label>
                      ))}
+                  </div>
+                </div>
+
+                {/* NEW: Availability Filter */}
+                <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-bold text-xs text-gray-500 uppercase tracking-wider">Availability</h3>
+                    {availability && (
+                      <button 
+                        onClick={() => setAvailability(null)}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {/* In Stock */}
+                    <label className="flex items-center space-x-3 cursor-pointer group">
+                      <input 
+                        type="radio"
+                        name="availability"
+                        value="in-stock"
+                        checked={availability === 'in-stock'}
+                        onChange={() => setAvailability('in-stock')}
+                        className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700 group-hover:text-blue-600 transition-colors">In Stock</span>
+                    </label>
+                    {/* Sold Out */}
+                    <label className="flex items-center space-x-3 cursor-pointer group">
+                      <input 
+                        type="radio"
+                        name="availability"
+                        value="sold-out"
+                        checked={availability === 'sold-out'}
+                        onChange={() => setAvailability('sold-out')}
+                        className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700 group-hover:text-blue-600 transition-colors">Sold Out</span>
+                    </label>
                   </div>
                 </div>
               </>
@@ -275,7 +322,6 @@ function App() {
                     <ProductCard 
                       key={product.id} 
                       product={product} 
-                      // 3. PASS CLICK HANDLER
                       onClick={(p) => setSelectedProduct(p)}
                     />
                   ))}
@@ -285,7 +331,7 @@ function App() {
         </div>
       </main>
 
-      {/* 4. RENDER MODAL CONDITIONALITY */}
+      {/* Modal */}
       {selectedProduct && (
         <ProductModal 
           product={selectedProduct} 

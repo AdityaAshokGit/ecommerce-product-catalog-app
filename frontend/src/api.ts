@@ -34,6 +34,11 @@ export const getProducts = async (params: ProductParams): Promise<Product[]> => 
   if (params.minPrice !== undefined) searchParams.append('minPrice', params.minPrice.toString());
   if (params.maxPrice !== undefined) searchParams.append('maxPrice', params.maxPrice.toString());
 
+  // 5. Availability 
+  if (params.availability) {
+    searchParams.append('availability', params.availability);
+  }
+
   const response = await axios.get<Product[]>(`${API_URL}/products?${searchParams.toString()}`);
   return response.data;
 };

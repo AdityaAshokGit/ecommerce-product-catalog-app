@@ -108,7 +108,8 @@ def filter_products(
     brands: Optional[List[str]] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
-    sort_by: Optional[str] = None
+    sort_by: Optional[str] = None,
+    availability: Optional[str] = None
 ) -> List[Product]:
     
     products = get_all_products()
@@ -138,6 +139,12 @@ def filter_products(
     
     if max_price is not None:
         products = [p for p in products if p.price <= max_price]
+
+    if availability:
+        if availability == "in-stock":
+            products = [p for p in products if p.in_stock]
+        elif availability == "sold-out":
+            products = [p for p in products if not p.in_stock]
 
     # 3. SORT
     if sort_by == "price_asc":
