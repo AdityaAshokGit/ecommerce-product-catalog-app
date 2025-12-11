@@ -3,6 +3,10 @@ from backend.models import Product
 from backend.database import get_all_products
 import re
 import traceback
+import time
+from backend.logger import get_logger
+
+logger = get_logger(__name__)
 
 # --- INVERTED INDEX STORAGE ---
 SEARCH_INDEX: Dict[str, Set[str]] = {}
@@ -10,9 +14,10 @@ IS_INDEX_BUILT = False
 
 # --- NORMALIZATION LOGIC ---
 def normalize_text(text: str) -> str:
+    """Normalize text for search indexing and matching."""
     if not text:
         return ""
-    text = str(text).lower() # Ensure string
+    text = str(text).lower()  # Ensure string
     text = re.sub(r'[^\w\s]', ' ', text)
     return " ".join(text.split())
 
@@ -24,8 +29,13 @@ def normalize_key(text: str) -> str:
     return normalize_text(text)
 
 # --- INDEXING LOGIC ---
-def build_search_index(products: List[Product]):
+def build_search_index(products: List[Product]) -> None:
+    """Build inverted index for fast search."""
     global SEARCH_INDEX, IS_INDEX_BUILT
+    
+    start_time = time.time()
+    logger.info(f"Building search index for {len(products)} products...")
+    
     SEARCH_INDEX.clear()
     for product in products:
         content = f"{product.name} {product.description} {product.brand} {product.category}"
@@ -35,6 +45,9 @@ def build_search_index(products: List[Product]):
                 SEARCH_INDEX[token] = set()
             SEARCH_INDEX[token].add(product.id)
     IS_INDEX_BUILT = True
+    
+    duration = time.time() - start_time
+    logger.info(f"Search index built: {len(SEARCH_INDEX)} unique tokens | Duration: {duration:.3f}s")
 
 def search_with_index(query: str, all_products: List[Product]) -> List[Product]:
     global IS_INDEX_BUILT
@@ -70,6 +83,8 @@ def filter_products(
     page: int = 1,   
     limit: int = 15   
     ) -> Dict[str, Any]:   
+    
+    start_time = time.time()
     
     products = get_all_products()
 
@@ -109,6 +124,9 @@ def filter_products(
     start = (page - 1) * limit
     end = start + limit
     paginated_items = products[start:end]
+    
+    duration = time.time() - start_time
+    logger.info(f"Filter query: results={total_count}, page={page}, sort={sort_by} | Duration: {duration:.3f}s")
 
     return {
         "items": paginated_items,
@@ -127,6 +145,8 @@ def get_faceted_metadata(
     availability: Optional[str] = None
 ) -> Dict[str, Any]:
     
+    start_time = time.time()
+    
     all_products = get_all_products()
     
     # 1. Base Context: Search
@@ -135,8 +155,6 @@ def get_faceted_metadata(
     else:
         base_products = all_products
 
-    # 2. Global Filters Helper
-    # Added ignore_price flag to help with the fix
     def apply_filters(products_list, ignore_avail=False, ignore_price=False):
         filtered = products_list
         
@@ -207,10 +225,6 @@ def get_faceted_metadata(
         {"name": "Sold Out", "value": "sold-out", "count": sold_out_count}
     ]
 
-    # --- D. PRICE BOUNDS (Ignore Price Filter) ---
-    # FIX: We use apply_filters with ignore_price=True
-    # This ensures the bounds reflect the "Available Range" based on other filters,
-    # NOT the "Selected Range".
     price_context = apply_filters(base_products, ignore_price=True)
     
     if categories:
@@ -227,6 +241,9 @@ def get_faceted_metadata(
     else:
         calc_min = 0
         calc_max = 0
+    
+    duration = time.time() - start_time
+    logger.info(f"Faceted metadata computed: categories={len(cat_facets)}, brands={len(brand_facets)} | Duration: {duration:.3f}s")
 
     return {
         "categories": cat_facets,

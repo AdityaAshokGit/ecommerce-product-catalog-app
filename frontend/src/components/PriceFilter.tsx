@@ -9,28 +9,20 @@ interface Props {
 }
 
 export const PriceFilter = ({min, max, onChange, initialMin, initialMax }: Props) => {
-  // 1. STRICT BOUNDARIES: 
   const rangeMin = 0; 
   const rangeMax = Math.ceil(max);
 
-  // Initialize state
   const [minVal, setMinVal] = useState(initialMin ?? rangeMin);
   const [maxVal, setMaxVal] = useState(initialMax ?? rangeMax);
 
-  // --- THE FIX IS HERE ---
-  // Sync internal state if props change.
-  // We added logic to CLAMP the values if the new dataset is smaller than the user's selection.
   useEffect(() => {
     let nextMin = initialMin ?? rangeMin;
     let nextMax = initialMax ?? rangeMax;
 
-    // 1. Clamp Max: If selected max (e.g. 198) > available max (e.g. 153), snap to 153.
-    // This prevents the blue slider bar from calculating > 100% width.
     if (nextMax > rangeMax) {
       nextMax = rangeMax;
     }
 
-    // 2. Clamp Min: Just for safety, ensure we don't go below 0.
     if (nextMin < rangeMin) {
       nextMin = rangeMin;
     }
@@ -38,15 +30,11 @@ export const PriceFilter = ({min, max, onChange, initialMin, initialMax }: Props
     setMinVal(nextMin);
     setMaxVal(nextMax);
   }, [initialMin, initialMax, rangeMin, rangeMax]);
-  // -----------------------
-
-  // --- HANDLERS (Unchanged) ---
 
   const handleMinInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = parseInt(e.target.value, 10);
     if (isNaN(value)) value = rangeMin;
 
-    // Constraint: 0 <= value <= (maxVal - 1)
     value = Math.min(Math.max(rangeMin, value), maxVal - 1);
     
     setMinVal(value);

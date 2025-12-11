@@ -1,10 +1,8 @@
 import axios from 'axios';
-// Import the new PaginatedResponse type
 import type { Product, FilterOptions, ProductParams, PaginatedResponse } from './types';
 
-const API_URL = 'http://localhost:8000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
-// CHANGE return type from Promise<Product[]> to Promise<PaginatedResponse<Product>>
 export const getProducts = async (params: ProductParams): Promise<PaginatedResponse<Product>> => {
   const searchParams = new URLSearchParams();
 
@@ -29,16 +27,13 @@ export const getProducts = async (params: ProductParams): Promise<PaginatedRespo
   if (params.maxPrice !== undefined) searchParams.append('maxPrice', params.maxPrice.toString());
   if (params.availability) searchParams.append('availability', params.availability);
 
-  // Pagination Params
   searchParams.append('page', (params.page || 1).toString());
   searchParams.append('limit', (params.limit || 20).toString());
 
-  // Update Generic here too
   const response = await axios.get<PaginatedResponse<Product>>(`${API_URL}/products?${searchParams.toString()}`);
   return response.data;
 };
 
-// ... (Rest of file: getMetadata, getRecommendations stay the same)
 export const getMetadata = async (params: ProductParams): Promise<FilterOptions> => {
   const searchParams = new URLSearchParams();
 
@@ -61,9 +56,6 @@ export const getMetadata = async (params: ProductParams): Promise<FilterOptions>
   if (params.minPrice !== undefined) searchParams.append('minPrice', params.minPrice.toString());
   if (params.maxPrice !== undefined) searchParams.append('maxPrice', params.maxPrice.toString());
   if (params.availability) searchParams.append('availability', params.availability);
-
-  // DEBUG LOG
-  console.log("Fetching Dynamic Metadata:", searchParams.toString());
 
   const response = await axios.get<FilterOptions>(`${API_URL}/metadata?${searchParams.toString()}`);
   return response.data;

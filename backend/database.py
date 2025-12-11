@@ -1,7 +1,12 @@
 import json
 import os
+import time
 from typing import List, Optional, Dict
 from backend.models import Product, Order
+from pydantic import ValidationError
+from backend.logger import get_logger
+
+logger = get_logger(__name__)
 
 # Global In-Memory Database
 PRODUCTS: List[Product] = []
@@ -12,7 +17,7 @@ ORDERS: List[Order] = []
 # Example: "101": { "102": 5, "105": 2 }
 CO_PURCHASE_MAP: Dict[str, Dict[str, int]] = {}
 
-def build_recommendation_graph(orders: List[Order]):
+def build_recommendation_graph(orders: List[Order]) -> None:
     """
     Analyzes order history to build a co-occurrence matrix.
     Time Complexity: O(K * M^2) where K=Orders, M=Items per order.
@@ -20,7 +25,8 @@ def build_recommendation_graph(orders: List[Order]):
     global CO_PURCHASE_MAP
     CO_PURCHASE_MAP.clear()
     
-    print("🔄 Building Recommendation Graph...")
+    start_time = time.time()
+    logger.info("Building recommendation graph...")
     
     for order in orders:
         # Get unique items in this order to avoid self-linking
@@ -41,7 +47,11 @@ def build_recommendation_graph(orders: List[Order]):
                 if p2 not in CO_PURCHASE_MAP: CO_PURCHASE_MAP[p2] = {}
                 CO_PURCHASE_MAP[p2][p1] = CO_PURCHASE_MAP[p2].get(p1, 0) + 1
     
-    print(f"✅ Recommendation Graph built. tracked relationships for {len(CO_PURCHASE_MAP)} products.")
+    duration = time.time() - start_time
+    logger.info(
+        f"Recommendation graph built: {len(CO_PURCHASE_MAP)} products tracked | "
+        f"Duration: {duration:.3f}s"
+    )
 
 def get_recommended_product_ids(product_id: str, limit: int = 3) -> List[str]:
     """
@@ -59,11 +69,11 @@ def get_recommended_product_ids(product_id: str, limit: int = 3) -> List[str]:
     # Return just the IDs
     return [pid for pid, count in sorted_neighbors[:limit]]
 
-def calculate_popularity_scores(products: List[Product], orders: List[Order]):
+def calculate_popularity_scores(products: List[Product], orders: List[Order]) -> None:
     """
     Calculates popularity based on ORDER FREQUENCY (Unique Orders).
     """
-    frequency_map = {} # ProductID -> Count of Orders it appeared in
+    frequency_map: Dict[str, int] = {}  # ProductID -> Count of Orders it appeared in
 
     for order in orders:
         # Use a set to count a product only ONCE per order
@@ -72,12 +82,14 @@ def calculate_popularity_scores(products: List[Product], orders: List[Order]):
         for product_id in unique_items_in_order:
             frequency_map[product_id] = frequency_map.get(product_id, 0) + 1
 
-    # Update products
     for product in products:
         product.popularity_score = frequency_map.get(product.id, 0)
 
 def load_data():
     global PRODUCTS, ORDERS
+    
+    start_time = time.time()
+    logger.info("Loading data files...")
     
     # Get absolute path to data directory
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -91,31 +103,40 @@ def load_data():
         with open(products_path, 'r') as f:
             data = json.load(f)
             PRODUCTS = [Product(**item) for item in data]
-            print(f"✅ Loaded {len(PRODUCTS)} products")
+            logger.info(f"Loaded {len(PRODUCTS)} products from {products_path}")
     except FileNotFoundError:
-        print("❌ Critical: products.json missing")
+        logger.error(f"CRITICAL: products.json not found at {products_path}")
         PRODUCTS = []
-    except json.JSONDecodeError:
-         print("❌ Critical: products.json corrupt")
-         PRODUCTS = []
+    except json.JSONDecodeError as e:
+        logger.error(f"CRITICAL: products.json corrupt - {e}")
+        PRODUCTS = []
+    except ValidationError as e:
+        logger.error(f"CRITICAL: Invalid product data schema - {e}")
+        PRODUCTS = []
 
     # 2. Load Orders
     try:
         with open(orders_path, 'r') as f:
             orders_data = json.load(f)
             ORDERS = [Order(**item) for item in orders_data]
-            print(f"✅ Loaded {len(ORDERS)} orders")
+            logger.info(f"Loaded {len(ORDERS)} orders from {orders_path}")
             
             # --- CALCULATE METRICS ---
             calculate_popularity_scores(PRODUCTS, ORDERS)
-            build_recommendation_graph(ORDERS) # <--- NEW STEP
+            build_recommendation_graph(ORDERS)
             
     except FileNotFoundError:
-        print("⚠️ Warning: orders.json missing. Analytics disabled.")
+        logger.warning(f"orders.json not found at {orders_path}. Analytics disabled.")
         ORDERS = []
-    except json.JSONDecodeError:
-         print("⚠️ Warning: orders.json corrupt. Analytics disabled.")
-         ORDERS = []
+    except json.JSONDecodeError as e:
+        logger.warning(f"orders.json corrupt - {e}. Analytics disabled.")
+        ORDERS = []
+    except ValidationError as e:
+        logger.warning(f"Invalid order data schema - {e}. Analytics disabled.")
+        ORDERS = []
+    
+    total_duration = time.time() - start_time
+    logger.info(f"Data loading complete | Duration: {total_duration:.3f}s")
 
 def get_all_products() -> List[Product]:
     return PRODUCTS

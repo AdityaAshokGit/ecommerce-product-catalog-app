@@ -26,7 +26,6 @@ export interface FilterOptions {
   maxPrice: number;
 }
 
-// NEW: Pagination Response Wrapper
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;
@@ -43,6 +42,6 @@ export interface ProductParams {
   maxPrice?: number;
   sort?: string;
   availability?: string;
-  page?: number;  // NEW
-  limit?: number; // NEW
+  page?: number;
+  limit?: number;
 }

@@ -18,7 +18,6 @@ def test_get_products_integration(mock_get, client):
     """
     Hit the actual URL. Verify Pydantic serialization works over HTTP.
     """
-    # FIX: Return Pydantic Objects, NOT Dictionaries
     mock_get.return_value = [
         Product(id="1", name="TestProduct", price=10.0, category="TestCat", brand="TestBrand", in_stock=True, description="Desc", rating=5.0, image_url="url", popularity_score=0, tags=[])
     ]
@@ -41,7 +40,6 @@ def test_get_products_with_query_params(mock_get, client):
         Product(id="1", name="TestProduct", price=100.0, category="TestCat", brand="TestBrand", in_stock=True, description="Desc", rating=5.0, image_url="url", popularity_score=0, tags=[])
     ]
 
-    # FIX: Change 'q=API' to 'q=TestProduct' so it matches the mock name
     response = client.get("/api/products?q=TestProduct&minPrice=50")
     assert response.status_code == 200
     

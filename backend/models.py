@@ -14,20 +14,20 @@ class CamelModel(BaseModel):
     )
 
 class Product(CamelModel):
-    id: str
-    name: str
-    description: str
-    price: float
-    category: str
-    brand: str
-    rating: float
-    in_stock: bool
-    image_url: str
-    tags: List[str] = []
+    id: str = Field(min_length=1, description="Unique product identifier")
+    name: str = Field(min_length=1, max_length=500, description="Product name")
+    description: str = Field(max_length=5000, description="Product description")
+    price: float = Field(ge=0, le=1000000, description="Product price")
+    category: str = Field(min_length=1, max_length=100, description="Product category")
+    brand: str = Field(min_length=1, max_length=100, description="Product brand")
+    rating: float = Field(ge=0, le=5, description="Product rating")
+    in_stock: bool = Field(description="Stock availability")
+    image_url: str = Field(description="Product image URL")
+    tags: List[str] = Field(default_factory=list, description="Product tags")
     
     # This field isn't in the JSON, but we will calculate it.
     # We default to 0 so the model doesn't crash on load.
-    popularity_score: int = 0
+    popularity_score: int = Field(default=0, ge=0, description="Popularity score")
 
 class OrderItem(CamelModel):
     product_id: str

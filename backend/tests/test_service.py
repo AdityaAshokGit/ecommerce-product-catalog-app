@@ -4,8 +4,6 @@ from backend.product_service import filter_products
 import backend.product_service # Import module to access globals
 from backend.models import Product
 
-# --- FIX: RESET GLOBAL STATE ---
-# This ensures every test builds a fresh index based on its specific mock data
 @pytest.fixture(autouse=True)
 def reset_search_index():
     backend.product_service.IS_INDEX_BUILT = False
@@ -45,9 +43,9 @@ def test_price_mathematics(mock_get, chaos_data):
 
 @patch('backend.product_service.get_all_products')
 def test_sort_stability(mock_get, chaos_data):
-    # Add items to existing chaos_data list for this specific test
+    """Test that sort maintains stable order for equal values."""
+    # Add items with same price to test stability (removed negative price - now validated)
     test_data = chaos_data + [
-        Product(id="7", name="Negative Price", description="Buggy data", price=-5.0, category="Err", brand="Bug", rating=0.0, in_stock=True, image_url="u", tags=[], popularity_score=0),
         Product(id="8", name="Twin A", description=".", price=50.0, category="Basic", brand="Nike", rating=4.0, in_stock=True, image_url="u", tags=[], popularity_score=10),
         Product(id="9", name="Twin B", description=".", price=50.0, category="Basic", brand="Nike", rating=4.0, in_stock=True, image_url="u", tags=[], popularity_score=10)
     ]
@@ -56,9 +54,35 @@ def test_sort_stability(mock_get, chaos_data):
     results = filter_products(sort_by="price_asc")
     items = results['items']
     
-    assert items[0].price == -5.0
+    # Find the twins and verify stable sort order
     twins = [p for p in items if "Twin" in p.name]
     assert len(twins) == 2
+    assert twins[0].name == "Twin A"
+    assert twins[1].name == "Twin B"
+
+@patch('backend.product_service.get_all_products')
+def test_negative_price_validation(mock_get):
+    """Test that Pydantic properly rejects negative prices."""
+    from pydantic import ValidationError
+    
+    # Attempting to create Product with negative price should raise ValidationError
+    with pytest.raises(ValidationError) as exc_info:
+        Product(
+            id="invalid",
+            name="Bad Product",
+            description="Should fail",
+            price=-5.0,  # This should be rejected
+            category="Test",
+            brand="Test",
+            rating=3.0,
+            in_stock=True,
+            image_url="url",
+            tags=[],
+            popularity_score=0
+        )
+    
+    # Verify error mentions price
+    assert "price" in str(exc_info.value).lower()
 
 @patch('backend.product_service.get_all_products')
 def test_empty_database(mock_get):

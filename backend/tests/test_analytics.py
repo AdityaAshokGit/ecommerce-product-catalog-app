@@ -8,33 +8,24 @@ def test_popularity_frequency_vs_volume():
     Ensure we count 'Unique Orders' (Frequency), NOT 'Total Quantity' (Volume).
     """
     
-    # 1. Setup Mock Products
-    # We need products to hold the scores now
     mock_products = [
         Product(id="BULK_ITEM", name="Bulk", description=".", price=1.0, category=".", brand=".", rating=5.0, in_stock=True, image_url=".", popularity_score=0),
         Product(id="TRENDY_ITEM", name="Trendy", description=".", price=1.0, category=".", brand=".", rating=5.0, in_stock=True, image_url=".", popularity_score=0)
     ]
 
-    # 2. Setup Mock Orders
-    # Scenario:
-    # Product "BULK_ITEM": Bought 100 times in 1 order.
-    # Product "TRENDY_ITEM": Bought 1 time in 2 separate orders.
     mock_orders = [
-        # Order 1: Bulk buy
         Order(
             order_id="1", date="2023-01-01", customer_id="A", total=100,
             items=[
                 OrderItem(product_id="BULK_ITEM", quantity=100, price=1.0)
             ]
         ),
-        # Order 2: Trendy buy
         Order(
             order_id="2", date="2023-01-02", customer_id="B", total=10,
             items=[
                 OrderItem(product_id="TRENDY_ITEM", quantity=1, price=10.0)
             ]
         ),
-        # Order 3: Trendy buy again
         Order(
             order_id="3", date="2023-01-03", customer_id="C", total=10,
             items=[
@@ -43,11 +34,7 @@ def test_popularity_frequency_vs_volume():
         )
     ]
     
-    # 3. Execute Logic (In-Place Update)
     calculate_popularity_scores(mock_products, mock_orders)
-    
-    # 4. Assertions
-    # Map back to a dict for easier checking
     scores = {p.id: p.popularity_score for p in mock_products}
 
     # BULK_ITEM: Appeared in 1 order -> Score 1
@@ -72,7 +59,7 @@ def test_popularity_duplicate_items_in_one_order():
             order_id="1", date="2023-01-01", customer_id="A", total=20,
             items=[
                 OrderItem(product_id="A", quantity=1, price=10.0),
-                OrderItem(product_id="A", quantity=1, price=10.0) # Duplicate line
+                OrderItem(product_id="A", quantity=1, price=10.0)
             ]
         )
     ]

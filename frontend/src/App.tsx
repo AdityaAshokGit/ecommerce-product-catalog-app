@@ -19,34 +19,25 @@ function useDebounce<T>(value: T, delay: number): T {
 function App() {
   const [searchParams, setSearchParams] = useSearchParams();
   
-  // --- STATE MANAGEMENT ---
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [selectedCategories, setSelectedCategories] = useState<string[]>(searchParams.getAll('category'));
   const [selectedBrands, setSelectedBrands] = useState<string[]>(searchParams.getAll('brand'));
   const [sort, setSort] = useState(searchParams.get('sort') || 'popular');
-  
-  // Availability State
   const [availability, setAvailability] = useState<string | null>(searchParams.get('availability') || null);
 
-  // Price State
   const urlMin = searchParams.get('minPrice');
   const urlMax = searchParams.get('maxPrice');
   const [minPrice, setMinPrice] = useState<number | undefined>(urlMin ? Number(urlMin) : undefined);
   const [maxPrice, setMaxPrice] = useState<number | undefined>(urlMax ? Number(urlMax) : undefined);
 
-  // Pagination State (NEW)
   const [page, setPage] = useState<number>(Number(searchParams.get('page')) || 1);
-  const LIMIT = 18; // Items per page
+  const LIMIT = 18;
 
-  // Selected Product for Modal
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  // Debounce inputs
   const debouncedSearch = useDebounce(search, 300);
   const debouncedMin = useDebounce(minPrice, 300);
   const debouncedMax = useDebounce(maxPrice, 300);
-
-  // --- URL SYNCHRONIZATION ---
   useEffect(() => {
     const params = new URLSearchParams();
     
@@ -60,16 +51,11 @@ function App() {
     if (debouncedMax !== undefined) params.set('maxPrice', debouncedMax.toString());
     
     if (availability) params.set('availability', availability);
-    
-    // Sync Page to URL
     if (page > 1) params.set('page', page.toString());
 
     setSearchParams(params);
   }, [debouncedSearch, selectedCategories, selectedBrands, sort, debouncedMin, debouncedMax, availability, page, setSearchParams]);
 
-  // --- DATA FETCHING (REACT QUERY V5) ---
-
-  // 1. Metadata Query (Faceted Counts)
   const metadataQuery = useQuery({
     queryKey: ['metadata', { q: debouncedSearch, category: selectedCategories, brand: selectedBrands, min: debouncedMin, max: debouncedMax, availability }],
     queryFn: () => getMetadata({
@@ -83,7 +69,6 @@ function App() {
     placeholderData: (prev) => prev,
   });
 
-  // 2. Product Query (Paginated Results)
   const productQuery = useQuery({
     queryKey: ['products', { q: debouncedSearch, category: selectedCategories, brand: selectedBrands, sort, min: debouncedMin, max: debouncedMax, availability, page }],
     queryFn: () => getProducts({ 
@@ -99,10 +84,6 @@ function App() {
     }),
     placeholderData: (prev) => prev,
   });
-
-  // --- HANDLERS ---
-
-  // NOTE: We reset page to 1 whenever a filter changes
 
   const handleSearchChange = (val: string) => {
     setSearch(val);
@@ -138,7 +119,7 @@ function App() {
   };
 
   const handlePriceChange = (min?: number, max?: number) => {
-    setPage(1); // Reset page on price change (debouncing handles the delay)
+    setPage(1);
     setMinPrice(min);
     setMaxPrice(max);
   };
@@ -361,8 +342,22 @@ function App() {
                </div>
             ) : productQuery.isError ? (
                <div className="text-center py-20 bg-red-50 rounded-lg border border-red-200 text-red-600">
-                  <h3 className="font-bold mb-2">Something went wrong</h3>
-                  <p className="text-sm">Could not connect to the backend server.</p>
+                  <svg className="mx-auto h-12 w-12 text-red-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <h3 className="font-bold text-lg mb-2">Unable to Load Products</h3>
+                  <p className="text-sm mb-1">
+                    {productQuery.error instanceof Error 
+                      ? productQuery.error.message 
+                      : 'Could not connect to the backend server'}
+                  </p>
+                  <p className="text-xs text-red-500 mb-6">Please check that the backend is running on port 8000</p>
+                  <button
+                    onClick={() => productQuery.refetch()}
+                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors font-medium"
+                  >
+                    Try Again
+                  </button>
                </div>
             ) : productQuery.data?.items.length === 0 ? (
                <div className="text-center py-20 bg-white rounded-lg border border-gray-200 shadow-sm">

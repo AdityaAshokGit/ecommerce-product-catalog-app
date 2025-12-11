@@ -2,7 +2,6 @@ import type { Product } from '../types';
 
 interface Props {
   product: Product;
-  // NEW: Optional click handler to open modal
   onClick?: (product: Product) => void;
 }
 
@@ -81,7 +80,6 @@ export const ProductCard = ({ product, onClick }: Props) => {
                 : 'bg-gray-100 text-gray-400 cursor-not-allowed'
             }`}
             disabled={!product.inStock}
-            // NEW: Prevent card click when clicking "Add"
             onClick={(e) => {
               e.stopPropagation();
               // Add to cart logic would go here
