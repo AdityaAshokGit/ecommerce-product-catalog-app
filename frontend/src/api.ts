@@ -6,7 +6,7 @@ const API_URL = 'http://localhost:8000/api';
 export const getProducts = async (params: ProductParams): Promise<Product[]> => {
   const searchParams = new URLSearchParams();
 
-  // 1. Search Query: Only append if not empty
+  // 1. Search Query
   if (params.q && params.q.trim() !== '') {
     searchParams.append('q', params.q);
   }
@@ -34,14 +34,16 @@ export const getProducts = async (params: ProductParams): Promise<Product[]> => 
   if (params.minPrice !== undefined) searchParams.append('minPrice', params.minPrice.toString());
   if (params.maxPrice !== undefined) searchParams.append('maxPrice', params.maxPrice.toString());
 
-  console.log("Requesting:", searchParams.toString()); // Debug log for browser console
-
   const response = await axios.get<Product[]>(`${API_URL}/products?${searchParams.toString()}`);
   return response.data;
 };
 
-// ... keep getMetadata same
 export const getMetadata = async (): Promise<FilterOptions> => {
   const response = await axios.get<FilterOptions>(`${API_URL}/metadata`);
+  return response.data;
+};
+
+export const getRecommendations = async (productId: string): Promise<Product[]> => {
+  const response = await axios.get<Product[]>(`${API_URL}/products/${productId}/recommendations`);
   return response.data;
 };

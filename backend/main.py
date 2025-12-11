@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from backend.database import load_data, get_all_products
 from backend.product_service import filter_products, get_filter_options
 from typing import List
+from backend.database import load_data, get_recommended_product_ids, get_all_products
+from backend.models import Product
 
 # Lifecycle event to load data on startup
 @asynccontextmanager
@@ -55,3 +57,21 @@ def get_metadata():
     Returns available filter options (categories, brands) for the sidebar.
     """
     return get_filter_options()
+
+@app.get("/api/products/{product_id}/recommendations", response_model=List[Product])
+def get_recommendations(product_id: str):
+    """
+    Returns top 3 products frequently bought with the given product.
+    """
+    # 1. Get IDs from the Graph (O(1) lookup + Sort)
+    rec_ids = get_recommended_product_ids(product_id, limit=3)
+    
+    # 2. Resolve IDs to full Product objects
+    # In a DB, this would be `SELECT * WHERE ID IN (...)`
+    # Here, we scan the list. O(N) but negligible for N=2000.
+    all_products = get_all_products()
+    
+    # Filter to get the full objects
+    recs = [p for p in all_products if p.id in rec_ids]
+    
+    return recs

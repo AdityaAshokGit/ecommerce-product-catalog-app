@@ -4,6 +4,9 @@ import { useSearchParams } from 'react-router-dom';
 import { getProducts, getMetadata } from './api';
 import { ProductCard } from './components/ProductCard';
 import { PriceFilter } from './components/PriceFilter';
+// 1. IMPORT MODAL AND TYPE
+import { ProductModal } from './components/ProductModal';
+import type { Product } from './types';
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -17,24 +20,26 @@ function useDebounce<T>(value: T, delay: number): T {
 function App() {
   const [searchParams, setSearchParams] = useSearchParams();
   
-  // 1. Initialize State from URL
+  // State
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [selectedCategories, setSelectedCategories] = useState<string[]>(searchParams.getAll('category'));
   const [selectedBrands, setSelectedBrands] = useState<string[]>(searchParams.getAll('brand'));
   const [sort, setSort] = useState(searchParams.get('sort') || 'popular');
   
-  // Price State
   const urlMin = searchParams.get('minPrice');
   const urlMax = searchParams.get('maxPrice');
   const [minPrice, setMinPrice] = useState<number | undefined>(urlMin ? Number(urlMin) : undefined);
   const [maxPrice, setMaxPrice] = useState<number | undefined>(urlMax ? Number(urlMax) : undefined);
+
+  // 2. NEW STATE FOR SELECTED PRODUCT
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Debounce inputs
   const debouncedSearch = useDebounce(search, 300);
   const debouncedMin = useDebounce(minPrice, 300);
   const debouncedMax = useDebounce(maxPrice, 300);
 
-  // 2. Sync State -> URL
+  // Sync State -> URL
   useEffect(() => {
     const params = new URLSearchParams();
     
@@ -50,7 +55,7 @@ function App() {
     setSearchParams(params);
   }, [debouncedSearch, selectedCategories, selectedBrands, sort, debouncedMin, debouncedMax, setSearchParams]);
 
-  // 3. Data Fetching
+  // Data Fetching
   const metadataQuery = useQuery({
     queryKey: ['metadata'],
     queryFn: getMetadata,
@@ -68,8 +73,7 @@ function App() {
     }),
   });
 
-  // --- HANDLERS ---
-
+  // Handlers
   const handleCategoryToggle = (category: string) => {
     setSelectedCategories(prev => 
       prev.includes(category) 
@@ -268,13 +272,26 @@ function App() {
             ) : (
                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {productQuery.data?.map((product) => (
-                    <ProductCard key={product.id} product={product} />
+                    <ProductCard 
+                      key={product.id} 
+                      product={product} 
+                      // 3. PASS CLICK HANDLER
+                      onClick={(p) => setSelectedProduct(p)}
+                    />
                   ))}
                </div>
             )}
           </section>
         </div>
       </main>
+
+      {/* 4. RENDER MODAL CONDITIONALITY */}
+      {selectedProduct && (
+        <ProductModal 
+          product={selectedProduct} 
+          onClose={() => setSelectedProduct(null)} 
+        />
+      )}
     </div>
   );
 }

@@ -2,14 +2,18 @@ import type { Product } from '../types';
 
 interface Props {
   product: Product;
+  // NEW: Optional click handler to open modal
+  onClick?: (product: Product) => void;
 }
 
-export const ProductCard = ({ product }: Props) => {
-  // We keep the "HOT" badge for visually distinct high-performers
+export const ProductCard = ({ product, onClick }: Props) => {
   const isPopular = product.popularityScore > 50;
 
   return (
-    <div className="border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow p-4 bg-white flex flex-col h-full group/card">
+    <div 
+      className={`border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all p-4 bg-white flex flex-col h-full group/card ${onClick ? 'cursor-pointer ring-0 hover:ring-2 hover:ring-blue-500' : ''}`}
+      onClick={() => onClick && onClick(product)}
+    >
       {/* Image Container */}
       <div className="relative aspect-square mb-4 bg-gray-100 rounded-md overflow-hidden group">
         <img
@@ -31,7 +35,6 @@ export const ProductCard = ({ product }: Props) => {
       {/* Content */}
       <div className="flex-grow">
         <div className="flex justify-between items-start mb-1">
-          {/* Left: Brand + Category */}
           <div className="flex flex-col">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
               {product.brand}
@@ -41,15 +44,12 @@ export const ProductCard = ({ product }: Props) => {
             </span>
           </div>
           
-          {/* Right: Stats (Rating + Popularity) */}
           <div className="flex flex-col items-end">
-            {/* Rating */}
             <div className="flex items-center text-yellow-500 text-sm font-medium">
               <span>★</span>
               <span className="ml-1 text-gray-700">{product.rating}</span>
             </div>
             
-            {/* NEW: Popularity Score */}
             <div 
               className="flex items-center text-orange-500 text-xs font-medium mt-0.5" 
               title={`Popularity Score: ${product.popularityScore} (Based on order frequency)`}
@@ -81,6 +81,11 @@ export const ProductCard = ({ product }: Props) => {
                 : 'bg-gray-100 text-gray-400 cursor-not-allowed'
             }`}
             disabled={!product.inStock}
+            // NEW: Prevent card click when clicking "Add"
+            onClick={(e) => {
+              e.stopPropagation();
+              // Add to cart logic would go here
+            }}
         >
           {product.inStock ? 'Add' : 'No Stock'}
         </button>
