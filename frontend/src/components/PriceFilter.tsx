@@ -8,7 +8,7 @@ interface Props {
   initialMax?: number;
 }
 
-export const PriceFilter = ({min, max, onChange, initialMin, initialMax }: Props) => {
+export const PriceFilter = ({max, onChange, initialMin, initialMax }: Props) => {
   const rangeMin = 0; 
   const rangeMax = Math.ceil(max);
 
